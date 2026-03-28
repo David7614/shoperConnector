@@ -47,6 +47,9 @@ class AuthorizationController extends Controller
     {
         $model = new LoginForm();
         if($model->load(Yii::$app->request->post()) && $model->login()) {
+            if (Yii::$app->user->can('admin')) {
+                return $this->redirect(Url::toRoute(['admin/index']));
+            }
             return $this->redirect(Url::toRoute(['site/index']));
         }
 

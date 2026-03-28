@@ -72,6 +72,10 @@ class SiteController extends Controller
      */
     public function actionIndex()
     {
+        if (Yii::$app->user->can('admin')) {
+            return $this->redirect(Url::toRoute(['admin/index']));
+        }
+
         $user = User::findIdentity(Yii::$app->user->id);
 
         // $connection = new Connection($user);
