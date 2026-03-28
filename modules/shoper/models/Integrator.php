@@ -117,8 +117,8 @@ class Integrator extends ShoperShops{
                 $langCat->active=$trans->active;
                 $langCat->isdefault=$trans->isdefault;
                 $langCat->seo_title=$trans->seo_title;
-                $langCat->seo_description=substr($trans->seo_description, 0,250);
-                $langCat->seo_keywords=substr($trans->seo_keywords, 0,250);
+                $langCat->seo_description=mb_substr($trans->seo_description, 0,250);
+                $langCat->seo_keywords=mb_substr($trans->seo_keywords, 0,250);
                 $langCat->permalink=$trans->permalink;
                 if (!$langCat->save()){
                     print_r($langCat->getErrors());
@@ -393,7 +393,7 @@ class Integrator extends ShoperShops{
             $Address->street_2=$res->street_2;
             $Address->city=$res->city;
             $Address->zip_code=$res->zip_code;
-            $Address->state=substr($res->state, 0,15);
+            $Address->state=mb_substr($res->state, 0,15);
             $Address->country=$res->country;
             $Address->default=$res->default;
             $Address->shipping_default=$res->shipping_default;

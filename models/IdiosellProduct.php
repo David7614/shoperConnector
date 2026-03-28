@@ -257,7 +257,7 @@ class IdiosellProduct
                     if ((in_array($productStockQuantity->stockId, $allowedStockIds)) || count($allowedStockIds) == 0) {
                         foreach ($productStockQuantity->productSizesData as $stockData) {
                         	$variant['PRODUCT_ID']=$product->productId;
-                        	$variant['TITLE']=substr($this->getTitle() . htmlspecialchars($stockData->sizePanelName), 0,249);
+                        	$variant['TITLE']=mb_substr($this->getTitle() . htmlspecialchars($stockData->sizePanelName), 0,249);
                         	$variant['IMAGE']=$product->productIcon->productIconLargeUrl;
                         	$variant['PRICE_BEFORE_DISCOUNT']=isset($product->productRetailPrice)?$product->productRetailPrice:0;
                         	$variant['DESCRIPTION']=$this->getDescription();
