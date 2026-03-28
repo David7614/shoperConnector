@@ -20,6 +20,20 @@ use app\models\Customers;
 use app\modules\shoper\models\ShoperShops;
 use app\services\QueueRunnerService;
 
+
+/*
+
+integration_types:
+category
+countries
+customer
+order
+product
+subscribers
+tags
+
+*/
+
 class XmlGeneratorController extends Controller
 {
     public $what;
@@ -38,289 +52,6 @@ class XmlGeneratorController extends Controller
         Queue::prepareQueue(XmlFeed::TAGS);        
         Queue::prepareQueue('countries');
         Queue::prepareQueue('subscribers');
-    }
-
-    private function testWholesale(){
-        $userId=35;
-        $user=User::findOne($userId);
-        $connection = new Connection($user);
-        $gate='http://'.$user->username.'/api/?gate=clients/get/170/soap/wsdl&lang=pol';
-        $client=new IdioselClient($gate, $connection->getToken()->getToken());
-        $request=new SoapRequest();
-        $request->addParam('resultsLimit', 1);  
-        $request->addParam('clients', ['clientsIds'=>[26]]);  
-        // var_dump($request->getRequest());
-        // die();
-        $response = $client->get($request->getRequest());
-        var_dump($response);
-    }
-
-    public function actionTestshoper($method='', $customerId='', $queueId='', $filePrepare=false){
-        var_dump($method);
-        var_dump($customerId);
-
-        $user=User::findOne($customerId);
-
-
-
-        $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);
-
-        if ($queueId){
-            echo $queueId;
-            $queue=Queue::findOne($queueId);
-            if ($filePrepare){
-                var_dump($integrator->prepareCustomersFile($queue)); 
-                die ("filePrepare");
-            }
-        }
-
-        $functionResult = $integrator->{'generate' . ucfirst($method).'test'}($user, $queue);
-
-        die ("shoper test ");
-    }
-    public function actionUrlFixer(){
-        echo "URL FIXER".PHP_EOL;
-        $products=\app\models\Product::find()->where(['user_id'=>86, 'deleted'=>0,'fixed_url'=>0])->limit(1)->all();
-        foreach ($products as $product){
-            echo "****************".PHP_EOL;
-            echo $product->user->shop_type.PHP_EOL;
-            echo $product->TITLE.PHP_EOL;
-            echo $product->URL.PHP_EOL;
-            echo "***".PHP_EOL;
-            if ($product->user->shop_type!='idiosell'){
-                echo "wrong store";
-                $product->fixed_url=10;
-                $product->save();
-                continue;
-            }
-            if (!$product->user->active){
-                echo "user non active";
-                $product->delete();
-                continue;
-            }
-
-            // $properUrl = $this->urlRedirectGrab($product->URL);
-
-            $properUrl=$product->user->url.'/product-pol-'.$product->PRODUCT_ID.'-'.$product->getSlug().'.html';
-
-
-            echo "PROPER URL:".PHP_EOL;
-            echo $properUrl.PHP_EOL;
-
-            die ("SZTOP");
-
-            if (strpos($properUrl, 'cat-pol')!== false) { // kategoria, czyli produkt nieaktywny
-                echo "NON ACTIVE".PHP_EOL;
-                $product->deleted=1;
-                $product->fixed_url=20;
-                $product->save();
-                continue;
-            }
-            if (strpos($properUrl, 'product')!== false) { // kategoria, czyli produkt nieaktywny
-                $product->URL=$properUrl;
-                $product->fixed_url=1;
-
-                $product->save();
-            }
-            
-        }
-    }
-
-    private function urlRedirectGrab($url){
-        echo " -- url check --".PHP_EOL;
-        $oldUrl=$url;
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL,$url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_HEADER, true);
-        $html = curl_exec($ch);
-        // die ("WAIT");
-        $status_code = curl_getinfo($ch,CURLINFO_HTTP_CODE);
-        $url = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
-        echo $status_code." ".$url.PHP_EOL;
-        if ($status_code==429){
-            die ("TO MANY REQUESTS");
-        }
-        if ($status_code==301 || $status_code==301){
-            return $this->urlRedirectGrab($url);
-        }
-        if ($url==''){
-            return $oldUrl;
-            $url=curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
-            echo $url.PHP_EOL;
-            echo $oldUrl.PHP_EOL;
-            die("STOP!");
-        }
-        // die("!!!");
-        echo "DONE".PHP_EOL;
-        return $url;
-    }
-
-
-
-    public function actionTest($method='', $param1='', $param2='', $param3=''){
-
-
-
-        $userId=125; // 20933
-        $user=User::findOne($userId);
-
-
-        
-        // $query = \app\models\Product::find()
-        //     ->where(['user_id' => $userId, 'PRODUCT_ID'=>['19517', '19518']]);
-
-        
-        // $res = $query->all();
-        // $products_str = "";
-        // foreach ($res as $product) {
-        //     if ($product->response=='-'){
-        //         $aggregate_groups_as_variants=$user->config->get('aggregate_groups_as_variants');
-        //         $par['aggregate_groups_as_variants']=$aggregate_groups_as_variants;
-        //         $products_str .= $product->getXmlEntity($par);
-        //     }else{
-        //         // $products_str .= unserialize($product->response);
-        //     }
-        // }
-        // echo $products_str;
-        
-
-        // die ("!!!");
-        
-        
-
-        $connection = new Connection($user);
-        $gate = "https://{$user->username}/api/?gate=products/get/182/soap/wsdl&lang=pol";
-
-
-
-
-
-
-        //sambaai
-        //k0NI@czku?N1eDz13k!
-
-        $context = stream_context_create([
-            'ssl' => [
-                // set some SSL/TLS specific options
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-                'allow_self_signed' => true
-            ]
-        ]);
-        $authKey=sha1(date('Ymd') . sha1('k0NI@czku?N1eDz13k!'));
-        $auth=[
-            'userLogin'=>'sambaai',
-            'authenticateKey' => $authKey,
-            // 'stream_context' => $context
-        ];
-        $request=new \app\modules\xml_generator\src\SoapRequest();
-        $request->addParam('resultsPage', 1);
-        $request->addParam('resultsLimit', 10);
-        $request->setAuth($auth);
-        // var_dump($request->getRequest());
-        // die();
-        $binding['location'] = $gate;
-        $binding['trace'] = true;
-        $client=new \SoapClient($gate, $binding);
-        $response = $client->__call('get', $request->getRequest());
-
-        die ("SS");
-      
-
-        if (!$Token){
-            die ("do chuja nulll Token");
-        }
-        $token=$Token->getToken();
-        $client=new IdioselClient($gate, $token);
-        
-
-        // $request->addParam('returnElements', '* productIndividualUrlsData'); 
-        $response = $client->get($request->getRequest());
-
-        // $response = $client->getNewsletterEmailShops($request->getRequest());
-        foreach ($response->results as $product) {
-            var_dump($product->productId).PHP_EOL;
-            
-            echo $product->productId.PHP_EOL;
-            // echo $product->productWholesalePrice.PHP_EOL;
-            // if ($product->productId==168096 || $product->productId==168095|| $product->productId==168097){
-                // var_dump($product).PHP_EOL;    
-                // var_dump($product->productVersion).PHP_EOL;    
-                // var_dump($product->productVersion->versionProductsIds).PHP_EOL;    
-                // var_dump($product->productVersion->versionParentId).PHP_EOL;    
-                // var_dump($product->productVersion->versionGroupNames).PHP_EOL;    
-                $idiosellProduct=new \app\models\IdiosellProduct($product, $user);
-                $idiosellProduct->prepareFromApi();
-                // die("!");
-                // if (!Product::insertProduct($prodChild, $userId)){
-                //     $queue->setErrorStatus('Błąd zapisu produktu');  
-                //     return 0;
-                // }
-            // }
-
-
-
-
-        }
-        // var_dump($request->getRequest());
-        // print_r($response);
-        // print_r($response->results);
-
-       
-
-       
-        die ("TEST");
-    }
-    public function actionCheckIntegrations(){
-        
-        $user_list = User::find()->where(['active'=>1])->all();
-        foreach ($user_list as $user){
-            echo PHP_EOL."************************ USER: ".$user->username.PHP_EOL;
-            if ($user->shop_type=='shoper'){
-                echo "shoper";
-            }else{
-                echo "idiosell".PHP_EOL;
-                $xml_generator = new XmlFeed();
-                $xml_generator->setType('product');
-                $xml_generator->setUser($user);
-                $urls = [];
-                $urls['products'] = $xml_generator->getFile(true, false);
-                $xml_generator->setType('customer');
-                $urls['customer'] = $xml_generator->getFile(true, false);
-                $xml_generator->setType('order');
-                $urls['order'] = $xml_generator->getFile(true, false);
-                $xml_generator->setType('category');
-                $urls['category'] = $xml_generator->getFile(true, false);
-
-                foreach ($urls as $type=>$fileName){
-                    echo "**** TYP ".$type.PHP_EOL;
-                    echo "plik ".$fileName.PHP_EOL;
-                    echo "Elementów w bazie: ".$user->countDatabaseElements($type).PHP_EOL;
-                    if (!is_file($fileName)){
-                        echo "BRAK PLIKU ".$fileName.PHP_EOL;
-                    }else{
-                        $xml=file_get_contents($fileName);
-                        $tagName=strtoupper($type);
-                        if ($type=='products'){
-                            $tagName='PRODUCT';
-                        }
-                        if ($type=='category'){
-                            $tagName='ITEM';
-                        }
-                        $tag_count = substr_count($xml, "<".$tagName.">");
-                        // $elem = new \SimpleXMLElement($xml);
-                        echo "W PLIKU ".$type.": ".$tag_count.PHP_EOL;
-
-                    }
-                }
-                
-            }
-
-        }
-
-        echo "checking done ".PHP_EOL;
-
     }
 
     public function actionGenerateTags($forceId=0)
@@ -386,52 +117,10 @@ class XmlGeneratorController extends Controller
         $queue->setPendingStatus();
     }
 
-    public function actionTomekOrders()
-    {
-        $time=microtime(true);
-
-        $queue = Queue::find()->where(['integration_type' => 'order', 'current_integrate_user'=>19])->one();
-        $user = $queue->getCurrentUser();
-        $xml_generator = new XmlFeed();
-        $xml_generator->setType('order');
-        $xml_generator->setQueue($queue);
-        $xml_generator->setUser($user);
-        $connection = new Connection($user);
-
-            if($connection->getToken() == null) {
-                echo "token eror ".PHP_EOL;
-                // $queue->setErrorStatus();
-                return ExitCode::UNSPECIFIED_ERROR;
-            }
-
-            try {
-                
-            } catch (InvalidArgumentException $e) {
-                // $queue->setErrorStatus();
-                echo "token eror 2".PHP_EOL;
-                return ExitCode::UNSPECIFIED_ERROR;
-            }
-
-        $feed_object = new OrderFeed();
-        $feed_object
-            // ->setType('order')
-            ->setUser($queue->getCurrentUser())
-            ->setToken($connection->getToken()->getToken())
-            // ->setQueue($this->_queue)
-            // ->generate($what);
-            ->checkOrders();
-        $time_elapsed_secs = microtime(true) - $time;
-        die ("!! ".$time_elapsed_secs);
-        return $this->establishQueue(XmlFeed::ORDER);
-    }
 
     public function actionGenerateProducts($forceId=0, $forcePage=null)
     {
         return (new QueueRunnerService())->run(XmlFeed::PRODUCT, ['forceId'=>$forceId, 'forcePage'=>$forcePage]);
-    }
-    public function actionGenerateShoperProducts($forceId=0)
-    {
-        return (new QueueRunnerService())->run(XmlFeed::PRODUCT, ['forceId'=>$forceId]);
     }
 
     public function actionGenerateCategories($forceId=0)
@@ -449,11 +138,6 @@ class XmlGeneratorController extends Controller
         return (new QueueRunnerService())->run(XmlFeed::ORDER, ['what' => 'objects']);
     }
 
-
-    // public function actionCustomersObjects()
-    // {
-    //     return $this->establishQueue(XmlFeed::CUSTOMER, ['what' => 'objects']);
-    // }
 
     public function actionGenerateSubscribers($forceId=0)
     {
