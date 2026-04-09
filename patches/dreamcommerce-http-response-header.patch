@@ -1,15 +1,24 @@
 --- a/src/DreamCommerce/ShopAppstoreLib/Http.php
 +++ b/src/DreamCommerce/ShopAppstoreLib/Http.php
-@@ -386,7 +386,11 @@
+@@ -380,13 +380,19 @@
+      */
+     protected function doRequest($url, $ctx, &$responseHeaders, $methodName) {
+         // make a real request
+-        $result = @file_get_contents($url, null, $ctx);
++        $prevReporting = error_reporting(error_reporting() & ~E_DEPRECATED);
++        $result = file_get_contents($url, null, $ctx);
++        error_reporting($prevReporting);
+         if (!$result) {
+             throw new \Exception('HTTP request failed', HttpException::REQUEST_FAILED);
          }
-
+ 
          // catch headers
 -        $responseHeaders = $this->parseHeaders($http_response_header);
 +        $responseHeaders = $this->parseHeaders(
-+            function_exists("http_get_last_response_headers")
++            function_exists('http_get_last_response_headers')
 +                ? http_get_last_response_headers()
 +                : $http_response_header
 +        );
-
+ 
          foreach (array('Content-Encoding', 'content-encoding') as $header) {
              if (isset($responseHeaders[$header])) {
