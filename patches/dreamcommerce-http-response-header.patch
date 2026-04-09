@@ -1,12 +1,12 @@
 --- a/src/DreamCommerce/ShopAppstoreLib/Http.php
 +++ b/src/DreamCommerce/ShopAppstoreLib/Http.php
-@@ -386,7 +386,10 @@ protected function doRequest($url, $ctx, &$responseHeaders, $methodName) {
+@@ -386,7 +386,11 @@
          }
 
          // catch headers
 -        $responseHeaders = $this->parseHeaders($http_response_header);
 +        $responseHeaders = $this->parseHeaders(
-+            function_exists('http_get_last_response_headers')
++            function_exists("http_get_last_response_headers")
 +                ? http_get_last_response_headers()
 +                : $http_response_header
 +        );
