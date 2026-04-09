@@ -24,6 +24,7 @@
         "kartik-v/yii2-widget-datepicker": "^1.4",
         "yiisoft/yii2-httpclient": "^2.0",
         "dreamcommerce/shop-appstore-lib": "^1.2",
+        "cweagans/composer-patches": "^1.7",
         "aws/aws-sdk-php": "^3.0"
     },
     "require-dev": {
@@ -44,7 +45,8 @@
             "enabled": false
         },
         "allow-plugins": {
-            "yiisoft/yii2-composer": true
+            "yiisoft/yii2-composer": true,
+            "cweagans/composer-patches": true
         }
     },
     "scripts": {
@@ -58,6 +60,11 @@
         "start": "php -S 0.0.0.0:$PORT -t web"
     },
     "extra": {
+        "patches": {
+            "dreamcommerce/shop-appstore-lib": {
+                "Fix deprecated $http_response_header in PHP 8.5": "patches/dreamcommerce-http-response-header.patch"
+            }
+        },
         "yii\\composer\\Installer::postCreateProject": {
             "setPermission": [
                 {
