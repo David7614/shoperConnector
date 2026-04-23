@@ -86,12 +86,6 @@ class QueueRunnerService
         try {
             echo $queue->integration_type . " !!!# " . PHP_EOL;
 
-            if ($queue->integration_type === 'subscribers') {
-                echo "NOT FOR SHOPER " . PHP_EOL;
-                $queue->setExecutedStatus();
-                return ExitCode::OK;
-            }
-
             $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);
 
             if ($filePrepare) {

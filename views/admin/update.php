@@ -177,14 +177,6 @@
                                 <td>Customers</td>
                                 <td><?= IntegrationData::getDataValue('last_customer_integration_date', $user->id) ?></td>
                             </tr>
-                            <tr>
-                                <td>Subscribers</td>
-                                <td><?= IntegrationData::getDataValue('LAST_SUBSCRIBER_INTEGRATION_DATE', $user->id) ?></td>
-                            </tr>
-                            <tr>
-                                <td>SMS subscribers</td>
-                                <td><?= IntegrationData::getDataValue('LAST_PHONESUBSCRIBER_INTEGRATION_DATE', $user->id) ?></td>
-                            </tr>
                         </table>
                     </div>
 

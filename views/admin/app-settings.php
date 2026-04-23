@@ -88,8 +88,6 @@ $this->title = 'Ustawienia aplikacji';
                 'product'           => 'Produkty (product)',
                 'customer'          => 'Klienci (customer)',
                 'category'          => 'Kategorie (category)',
-                'subscribers'       => 'Subskrybenci (subscribers)',
-                'phonesubscribers'  => 'Subskrybenci tel. (phonesubscribers)',
                 'subscribersimport' => 'Import subskrybentów (subscribersimport)',
                 'customerspartial'  => 'Klienci częściowi (customerspartial)',
             ];

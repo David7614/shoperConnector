@@ -76,10 +76,6 @@ class XmlFeed implements FeedGenerator
             case self::TAGS:
                 $feed_object = new Tags();
                 break;
-            case 'subscribers':
-                $feed_object = new SubscribersFeed();
-                
-                break;
             default:
                 throw new \Exception('Cannot create feed. Invaild feed type');
         }

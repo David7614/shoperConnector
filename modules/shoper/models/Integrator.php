@@ -126,14 +126,11 @@ class Integrator extends ShoperShops{
                     print_r($langCat->getErrors());
                 }
             }
-            var_dump($res->category_id);
         }
 
         if ($queue->max_page <= $queue->page){
             $this->generateCategoriesTree($client);
-
-            echo "jeszcze powiązania z tree";
-
+            echo "[category] building parent relations" . PHP_EOL;
         }
         return true;
 
@@ -175,8 +172,6 @@ class Integrator extends ShoperShops{
         $queue->additionalParameters=$parameters;
         $queue->save();
         foreach ($response as $res){
-            echo "attribute id ".$res->attribute_id.PHP_EOL;
-            echo "attribute name ".$res->name.PHP_EOL;
             $Attribute=ShoperAttributes::findOne(['shoper_shops_id'=>$this->id, 'attribute_id'=>$res->attribute_id]);
             if (!$Attribute){
                 $Attribute= new ShoperAttributes(['shoper_shops_id'=>$this->id, 'attribute_id'=>$res->attribute_id]);
@@ -198,12 +193,10 @@ class Integrator extends ShoperShops{
         }
 
         if ($parameters['attributes']['max_page']<=$parameters['attributes']['page']){
-            echo "all attributes done";
+            echo "[product] attributes done" . PHP_EOL;
             return true;
         }
-        echo "ATTRIBUTES FIRST";
         return false;
-        die ("ATTRIBUTES FIRST");
     }
 
     public function generateSubscriberData($queue){
@@ -236,7 +229,7 @@ class Integrator extends ShoperShops{
 
 
 
-        echo "sub strona ".$parameters['subscriber']['page']." of ".$parameters['subscriber']['max_page'].PHP_EOL;
+        echo "[customer] subscriber page " . $parameters['subscriber']['page'] . " of " . $parameters['subscriber']['max_page'] . PHP_EOL;
 
         if ($parameters['subscriber']['max_page']<$response->pages){
             $parameters['subscriber']['max_page']=$response->pages;
@@ -263,12 +256,10 @@ class Integrator extends ShoperShops{
         }
 
         if ($parameters['subscriber']['max_page']<=$parameters['subscriber']['page']){
-            echo "all subscriber done";
+            echo "[customer] subscribers done" . PHP_EOL;
             return true;
         }
-        echo "SUBSCRIBERS FIRST";
         return false;
-        die ("SUBSCRIBERS FIRST");
     }
 
     public function generateTags($queue){
@@ -313,16 +304,12 @@ class Integrator extends ShoperShops{
         }
 
         if ($parameters['tagslist']['max_page']<=$parameters['tagslist']['page']){
-            echo "all tagslist done";
+            echo "[customer] tags done" . PHP_EOL;
             return true;
         }
-        echo "tagslist FIRST";
         return false;
-        die ("tagslist FIRST");
     }
     public function generateAddressData($queue) {
-        Integrator::shoperLog('3.1 Step: Generate address data', $queue->id);
-
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['address'])){
             $parameters['address']=[];
@@ -362,28 +349,16 @@ class Integrator extends ShoperShops{
         }
         $parameters['address']['page']=$response->page;
 
-        echo "page: ".$parameters['address']['page']." ".PHP_EOL;
-        echo "max page: ".$parameters['address']['max_page']." ".PHP_EOL;
+        echo "[customer] address page " . $parameters['address']['page'] . " of " . $parameters['address']['max_page'] . PHP_EOL;
 
         $queue->additionalParameters=$parameters;
         $queue->save();
 
-        Integrator::shoperLog('3.1.1 Step: Generate address data', $queue->id);
-
         foreach ($response as $res) {
-            Integrator::shoperLog('3.2 Step: Generate address data', $queue->id);
-
             $Address=ShoperUserAddress::findOne(['shoper_shops_id'=>$this->id, 'address_book_id'=>$res->address_book_id]);
             if (!$Address) {
                 $Address= new ShoperUserAddress(['shoper_shops_id'=>$this->id, 'address_book_id'=>$res->address_book_id]);
-                Integrator::shoperLog('3.3 Step: Generate address data - create address object', $queue->id);
             }
-
-            Integrator::shoperLog('3.4 Step: Generate address data - After get address object', $queue->id);
-
-            // Integrator::shoperLog('==== data', $queue->id);
-            // Integrator::shoperLog(print_r($res, true), $queue->id);
-            // Integrator::shoperLog('==== data', $queue->id);
 
             $Address->user_id=$res->user_id;
             $Address->address_name=$res->address_name;
@@ -404,39 +379,21 @@ class Integrator extends ShoperShops{
             $Address->country_code=$res->country_code;
             $Address->tax_identification_number=$res->tax_identification_number;
 
-            Integrator::shoperLog('3.5 Step: Generate address data - Before save address', $queue->id);
-
             if (!$Address->save()) {
-                Integrator::shoperLog('3.6 Step: Generate address data - Address save ERROR:', $queue->id);
-                Integrator::shoperLog(print_r($Address->getErrors(), true), $queue->id);
-                Integrator::shoperLog('3.7 Step: Generate address data - Address save ERROR', $queue->id);
                 print_r($Address->getErrors());
-            } else {
-                Integrator::shoperLog('3.8 Step: Generate address data - Address saved', $queue->id);
-                echo "address saved ";
-                // echo $Address->user_id." ".$Address->address_book_id.PHP_EOL;
             }
-
-            Integrator::shoperLog('3.9 Step: Generate address data - After save address', $queue->id);
         }
 
         if ($parameters['address']['max_page']<=$parameters['address']['page']) {
-            Integrator::shoperLog('3.10 Step: Generate address data - All address done', $queue->id);
-            echo "all address done";
+            echo "[customer] addresses done" . PHP_EOL;
             return true;
         }
 
-        echo "ADDRESSES FIRST";
-        Integrator::shoperLog('3.11 Step: Generate address data - ADDRESSES FIRST', $queue->id);
-
         return false;
-        die ("ADDRESSES FIRST");
     }
 
     
     public function generateCustomer($queue){
-        Integrator::shoperLog('- 2.1 Step: Generate customer', $queue->id);
-
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['tagslist']['max_page']) || $parameters['tagslist']['max_page']>$parameters['tagslist']['page']){
             if (!$this->generateTags($queue)) {
@@ -444,15 +401,11 @@ class Integrator extends ShoperShops{
             }
         }
 
-        Integrator::shoperLog('- 2.1.1 Step: Generate customer', $queue->id);
-
         if (!isset($parameters['address']['max_page']) || $parameters['address']['max_page']>$parameters['address']['page']){
             if (!$this->generateAddressData($queue)) {
                 return false;
             }
         }
-
-        Integrator::shoperLog('- 2.1.2 Step: Generate customer', $queue->id);
 
         if (!isset($parameters['subscriber']['max_page']) || $parameters['subscriber']['max_page']>$parameters['subscriber']['page']){
             if (!$this->generateSubscriberData($queue)){
@@ -461,18 +414,13 @@ class Integrator extends ShoperShops{
         }
         $app=$this->prepareConnection();
 
-        Integrator::shoperLog('- 2.1.3 Step: Generate customer', $queue->id);
-
         $client = $app->getClient();
         $resource = new ShoperUser($client);
         if ($queue->page){
             $resource->page($queue->page+1);
-            // filter page
         }
 
-        Integrator::shoperLog('- 2.1.4 Step: Generate customer', $queue->id);
-
-        echo "[customer] get from api".PHP_EOL;
+        echo "[customer] get from api" . PHP_EOL;
 
         if ($queue->getCurrentUser()->getIncrementalFeedFlag()) {
             if ($queue->page == 0) {
@@ -500,15 +448,10 @@ class Integrator extends ShoperShops{
         $queue->save();
 
         foreach ($response as $res) {
-            Integrator::shoperLog('- 2.2 Step: Generate customer', $queue->id);
-
             $Customer = Customers::findOne(['customer_id'=>$res->user_id, 'user_id' => $queue->getCurrentUser()->id]);
             if (!$Customer) {
                 $Customer = new Customers(['customer_id'=>$res->user_id, 'user_id' => $queue->getCurrentUser()->id]);
-                Integrator::shoperLog('- 2.3 Step: Generate customer - Created customer object', $queue->id);
             }
-
-            Integrator::shoperLog('- 2.4 Step: Generate customer - After get customer', $queue->id);
 
             $Customer->email=$res->email;
             $Customer->registration=$res->date_add;
@@ -537,19 +480,10 @@ class Integrator extends ShoperShops{
             $Customer->data_permission='full'; // pewnie z adresów trzeba;
             $Customer->tags=serialize($res->tags);
 
-            Integrator::shoperLog('- 2.5 Step: Generate customer - Before save customer', $queue->id);
-
             if (!$Customer->save()) {
-                Integrator::shoperLog('- 2.6 Step: Generate customer - save ERROR:', $queue->id);
-                Integrator::shoperLog(print_r($Customer->getErrors(), true), $queue->id);
-                Integrator::shoperLog('- 2.6 Step: Generate customer - save ERROR', $queue->id);
                 print_r($Customer->getErrors());
                 die("!!");
             }
-
-            Integrator::shoperLog('- 2.7 Step: Generate customer - After save customer', $queue->id);
-
-            echo "uno";
         }
 
         if ($queue->max_page <= $queue->page){
@@ -601,12 +535,10 @@ class Integrator extends ShoperShops{
         }
 
         if ($parameters['producers']['max_page']<=$parameters['producers']['page']){
-            echo "all producers done";
+            echo "[product] producers done" . PHP_EOL;
             return true;
         }
-        echo "PRODUCERS FIRST";
         return false;
-        die ("PRODUCERS FIRST");
     }
 
     public function generateProduct($queue){
@@ -631,8 +563,7 @@ class Integrator extends ShoperShops{
         }
 
         if (IntegrationData::getDataValue('INITIAL_PRODUCTS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id) ){
-            echo "CONSTRIAINT".PHP_EOL;
-            echo IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id).PHP_EOL;
+            echo "[product] incremental from " . IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id) . PHP_EOL;
             $resource->filters([
                 // 'origin' => [0,1,2],
                 'updated_at'=>[
@@ -641,9 +572,8 @@ class Integrator extends ShoperShops{
             ]);
         }
 
-        echo "GENERETE PRODUCT --- ".PHP_EOL;
+        echo "[product] fetching from API" . PHP_EOL;
         $response=$resource->get();
-        var_dump($response->pages);
         if ($queue->max_page<$response->pages){
             $queue->max_page=$response->pages;
         }
@@ -652,21 +582,15 @@ class Integrator extends ShoperShops{
         foreach ($response as $res){
             // var_dump($res);
             foreach ($res->translations as $lang=>$trans){
-                echo $res->product_id.PHP_EOL;
-                
-                echo PHP_EOL;
                 $Product=Product::findOne(['user_id'=>$queue->getCurrentUser()->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
                 if (!$Product){
                     $Product = new Product(['user_id'=>$queue->getCurrentUser()->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
                 }
                 $Product->URL=$trans->permalink;
                 $Product->TITLE=$trans->name;
-                echo "!!!".$trans->name.PHP_EOL;
                 $Product->PRICE=str_replace(',','.',$res->stock->comp_promo_price);
-                echo "*** producer ***".PHP_EOL;
                 $Producer=ShoperProducer::findOne([ 'shoper_shops_id'=>$this->id,'producer_id'=>$res->producer_id]);
                 $Product->BRAND=$Producer?$Producer->name:'brak';
-                echo "*** /producer ***".PHP_EOL;
                 $Product->DESCRIPTION=$trans->description;
                 $Product->PRICE_BEFORE_DISCOUNT=str_replace(',','.',$res->stock->price);
                 $Product->PRICE_BUY=str_replace(',','.',$res->stock->price_buying);
@@ -679,17 +603,13 @@ class Integrator extends ShoperShops{
                     }
                 }
                 $Product->PRODUCT_LINE='brak';
-                echo "CATEGORY OBJ".PHP_EOL;
                 $CategoryObj=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
                 if (!$CategoryObj){
                     die ("no category imported yet");
                 }
                 $Product->CATEGORYTEXT=$CategoryObj->getFullPath($lang);
-                echo "/CATEGORY OBJ".PHP_EOL;
                 $Product->SHOW=$trans->active;
                 $parametersArray=[];
-                var_dump($res->attributes);
-                echo "*** attributes ***".PHP_EOL;
                 if ($res->attributes){
                     foreach ($res->attributes as $attributeId=>$attributeOptions){
                         $Attribute=ShoperAttributes::findOne(['shoper_shops_id'=>$this->id, 'attribute_id'=>$attributeId]);
@@ -704,7 +624,6 @@ class Integrator extends ShoperShops{
                         }
                     }
                 }
-                echo "*** /attributes ***".PHP_EOL;
                 $Product->PARAMETERS=serialize($parametersArray);
                 $variantArray=[];
                 if ($res->options){
@@ -802,17 +721,14 @@ class Integrator extends ShoperShops{
         }
 
         if ($parameters['statuses']['max_page']<=$parameters['statuses']['page']){
-            echo "all statuses done";
+            echo "[order] statuses done" . PHP_EOL;
             return true;
         }
         return false;
-        die ("statuses FIRST");
     }
 
     
     public function generateOrder($queue) {
-        Integrator::shoperLog('- 2.1 Step: Generate order', $queue->id);
-
         if ($queue->page == 0) {
             if (!$this->generateStatuses($queue)){
                 return false;
@@ -820,18 +736,13 @@ class Integrator extends ShoperShops{
             // $this->generateOrdersPositions($queue);
         }
 
-        Integrator::shoperLog('- 2.1.1 Step: Generate order', $queue->id);
-
         $app=$this->prepareConnection();
 
         $client = $app->getClient();
         $resource = new Order($client);
         if ($queue->page) {
             $resource->page($queue->page + 1);
-            // filter page
         }
-
-        Integrator::shoperLog('- 2.1.2 Step: Generate order', $queue->id);
 
         if ($queue->getCurrentUser()->getIncrementalFeedFlag()) {
             if ($queue->page == 0) {
@@ -855,48 +766,23 @@ class Integrator extends ShoperShops{
             $queue->max_page = $response->pages;
         }
 
-        Integrator::shoperLog('- 2.1.3 Step: Generate order', $queue->id);
+        echo "[order] page " . $response->page . " of " . $response->pages . PHP_EOL;
 
         $queue->page = $response->page;
         $queue->save();
 
-        Integrator::shoperLog('- 2.1.4 Step: Generate order', $queue->id);
-
-        Integrator::shoperLog('-------------------------------------------', $queue->id);
-        Integrator::shoperLog(print_r(sizeof($response), true), $queue->id);
-        Integrator::shoperLog('-------------------------------------------', $queue->id);
-
-        if (!count($response)){
-
-        }
         foreach ($response as $res) {
-            Integrator::shoperLog('2.2 Step: Before get order', $queue->id);
-
             $Order = Orders::find()->where(['order_id' => $res->order_id])
                 ->andWhere(['user_id' => $queue->getCurrentUser()->id])
                 ->one();
 
-            // $Order = Orders::findOne(['user_id' => $queue->getCurrentUser()->id, 'order_id' => $res->order_id]);
             if (!$Order) {
-                // Integrator::shoperLog('teeeeeeeeeeeeeeeeeeeeeeest', $queue->id);
-                Integrator::shoperLog('2.2.1 Step: order_id: ' . $res->order_id, $queue->id);
-                Integrator::shoperLog('2.2.2 Step: user_id: ' . $queue->getCurrentUser()->id, $queue->id);
-                Integrator::shoperLog('2.2.3 Step: order', $queue->id);
-                Integrator::shoperLog(print_r(!$Order, true), $queue->id);
-                Integrator::shoperLog(var_dump($Order), $queue->id);
-
-                Integrator::shoperLog('2.3 Step: new order object', $queue->id);
                 $Order = new Orders(['user_id' => $queue->getCurrentUser()->id, 'order_id' => $res->order_id]);
-                Integrator::shoperLog('2.4 Step: order object created', $queue->id);
             }
-
-            Integrator::shoperLog('2.5 Step: After get order - id ' . $Order->id, $queue->id);
 
             $Order->customer_id = $res->user_id;
             $Order->created_on = $res->date;
             $Order->finished_on = $res->date;
-
-            echo 'Response status: ' . $res->status_id . PHP_EOL;
 
             $ShoperStatus = ShoperStatus::findOne(['shoper_shops_id' => $this->id, 'status_id' => $res->status_id]);
             $Order->status = $ShoperStatus->sambaStatus;
@@ -920,19 +806,10 @@ class Integrator extends ShoperShops{
 
             $Order->order_positions = serialize($items);
 
-            Integrator::shoperLog('2.6 Step: Before order save', $queue->id);
-
             if (!$Order->save()) {
-                Integrator::shoperLog('2.7 Step: Order save error:', $queue->id);
-                Integrator::shoperLog(print_r($Order->getErrors(), true), $queue->id);
-                Integrator::shoperLog('2.8 Step: Order save error', $queue->id);
                 print_r($Order->getErrors());
             }
-
-            Integrator::shoperLog('2.9 Step: After order save', $queue->id);
         }
-
-        Integrator::shoperLog('- 2.10 Step: Generate order done', $queue->id);
 
         if ($queue->max_page <= $queue->page){
             IntegrationData::setData('LAST_ORDERS_DONE', date('Y-m-d'), $queue->getCurrentUser()->id);
@@ -943,7 +820,7 @@ class Integrator extends ShoperShops{
     }
 
     public function prepareFile($queue){
-        echo "file preparing";
+        echo "[" . $queue->integration_type . "] preparing file" . PHP_EOL;
         switch ($queue->integration_type){
             case 'product':
                 return $this->prepareProductsFile($queue);
@@ -965,7 +842,7 @@ class Integrator extends ShoperShops{
     }
 
     public function prepareDiversedFile($queue){
-        echo "file preparing";
+        echo "[" . $queue->integration_type . "] preparing file" . PHP_EOL;
         switch ($queue->integration_type){
             case 'product':
                 return $this->prepareProductsFile($queue);
@@ -1046,7 +923,7 @@ class Integrator extends ShoperShops{
         return false;
     }
     public function prepareCategoriesFile($queue){
-        echo "prepareCategoriesFile".PHP_EOL;
+        echo "[category] building XML file" . PHP_EOL;
         $categories = new \SimpleXMLElement('<CATEGORY/>');
         foreach (ShoperCategories::find()->where(['shoper_shops_id' => $this->id, 'parent_id'=>0])->all() as $category) {
             $item = $categories->addChild('ITEM');
@@ -1127,7 +1004,6 @@ class Integrator extends ShoperShops{
             $item->addChild('NLF_TIME', $this->getCorrectSambaDate($subscriber->dateadd));
         }*/
 
-        echo "put tp ".$this->getCustomersFile().PHP_EOL;
         $storage = $this->getStorage();
         if ($storage) {
             $storage->put($this->getMinioCustomersKey(), $customers->asXML(), 'application/xml');
@@ -1189,8 +1065,7 @@ class Integrator extends ShoperShops{
             $queue->save();
         }
 
-        echo "customer pages ".$customerPages.PHP_EOL;
-        echo " PAGE ".$page." of ".$integrationDataMaxPage.PHP_EOL;
+        echo "[customer] page " . $page . " of " . $integrationDataMaxPage . PHP_EOL;
 
         $usedEmails=[];
         $customers = new \SimpleXMLElement('<CUSTOMERS/>');
@@ -1290,8 +1165,7 @@ class Integrator extends ShoperShops{
             // echo $page.PHP_EOL;
             // echo $integrationDataMaxPage.PHP_EOL;
                 // die ("JUZ !!!!!");
-            echo "FINISHED ";
-            // $this->createCustomerXml($file, $temp);
+            echo "[customer] XML chunk prepared" . PHP_EOL;
 
             return 1;
         }
@@ -1441,7 +1315,6 @@ class Integrator extends ShoperShops{
 
         }
         $res=$resource->post($data);
-        var_dump($res);
         return $res;
 
     }

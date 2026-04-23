@@ -313,8 +313,6 @@ class AdminController extends Controller
             \app\modules\xml_generator\src\XmlFeed::ORDER,
             \app\modules\xml_generator\src\XmlFeed::TAGS,
             'countries',
-            'subscribers',
-            'phonesubscribers',
         ];
 
         foreach ($types as $type) {
@@ -422,8 +420,6 @@ class AdminController extends Controller
             'product'           => AppConfig::STOP_FEED_PRODUCT,
             'customer'          => AppConfig::STOP_FEED_CUSTOMER,
             'category'          => AppConfig::STOP_FEED_CATEGORY,
-            'subscribers'       => AppConfig::STOP_FEED_SUBSCRIBERS,
-            'phonesubscribers'  => AppConfig::STOP_FEED_PHONESUBSCRIBERS,
             'subscribersimport' => AppConfig::STOP_FEED_SUBSCRIBERSIMPORT,
             'customerspartial'  => AppConfig::STOP_FEED_CUSTOMERSPARTIAL,
         ];
@@ -583,9 +579,6 @@ class AdminController extends Controller
             'order'            => 'Zamówienia',
             'customer'         => 'Klienci',
             'category'         => 'Kategorie',
-            'subscribers'      => 'Subskrybenci',
-            'phone_subscriber' => 'SMS sub.',
-            'phonesubscribers' => 'SMS sub.',
             'tag'              => 'Tagi',
             'countries'        => 'Kraje',
         ];

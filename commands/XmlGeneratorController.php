@@ -29,7 +29,6 @@ countries
 customer
 order
 product
-subscribers
 tags
 
 */
@@ -49,9 +48,8 @@ class XmlGeneratorController extends Controller
         Queue::prepareQueue(XmlFeed::PRODUCT);
         Queue::prepareQueue(XmlFeed::CATEGORY);
         Queue::prepareQueue(XmlFeed::ORDER);
-        Queue::prepareQueue(XmlFeed::TAGS);        
+        Queue::prepareQueue(XmlFeed::TAGS);
         Queue::prepareQueue('countries');
-        Queue::prepareQueue('subscribers');
     }
 
     public function actionGenerateTags($forceId=0)
@@ -139,10 +137,6 @@ class XmlGeneratorController extends Controller
     }
 
 
-    public function actionGenerateSubscribers($forceId=0)
-    {
-        return (new QueueRunnerService())->run('subscribers', ['forceId'=>$forceId]);
-    }
     public function actionGenerateCustomers($forceId=0)
     {
         return (new QueueRunnerService())->run(XmlFeed::CUSTOMER, ['forceId'=>$forceId]);
@@ -180,11 +174,6 @@ class XmlGeneratorController extends Controller
     public function actionLoopCustomers(int $limitSeconds = 540)
     {
         return $this->loopQueue(XmlFeed::CUSTOMER, [], $limitSeconds);
-    }
-
-    public function actionLoopSubscribers(int $limitSeconds = 540)
-    {
-        return $this->loopQueue('subscribers', [], $limitSeconds);
     }
 
     public function actionLoopCategories(int $limitSeconds = 540)
@@ -304,13 +293,7 @@ class XmlGeneratorController extends Controller
                     // skip for now
                 // }
                 echo $queue->integration_type." !!!# ".PHP_EOL;
-                if ($queue->integration_type == 'subscribers'){
-                    echo "NOT FOR SHOPER ".PHP_EOL;
-                    $queue->setExecutedStatus();
-                    return ExitCode::OK;
-                }
 
-                
 
 
                 $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);

@@ -21,8 +21,6 @@ class AppConfig extends \yii\db\ActiveRecord
     const STOP_FEED_PRODUCT           = 'STOP_FEED_PRODUCT';
     const STOP_FEED_CUSTOMER          = 'STOP_FEED_CUSTOMER';
     const STOP_FEED_CATEGORY          = 'STOP_FEED_CATEGORY';
-    const STOP_FEED_SUBSCRIBERS       = 'STOP_FEED_SUBSCRIBERS';
-    const STOP_FEED_PHONESUBSCRIBERS  = 'STOP_FEED_PHONESUBS';
     const STOP_FEED_SUBSCRIBERSIMPORT = 'STOP_FEED_SUBIMPORT';
     const STOP_FEED_CUSTOMERSPARTIAL  = 'STOP_FEED_CUSTPARTIAL';
 
@@ -85,8 +83,6 @@ class AppConfig extends \yii\db\ActiveRecord
             'product'          => self::STOP_FEED_PRODUCT,
             'customer'         => self::STOP_FEED_CUSTOMER,
             'category'         => self::STOP_FEED_CATEGORY,
-            'subscribers'      => self::STOP_FEED_SUBSCRIBERS,
-            'phonesubscribers' => self::STOP_FEED_PHONESUBSCRIBERS,
             'subscribersimport'=> self::STOP_FEED_SUBSCRIBERSIMPORT,
             'customerspartial' => self::STOP_FEED_CUSTOMERSPARTIAL,
         ];
