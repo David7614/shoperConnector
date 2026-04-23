@@ -340,7 +340,8 @@ class User extends \yii\db\ActiveRecord implements IdentityInterface
     }
 
     public function getUserData($name){
-        return UserData::findOne(['user_id' => $this->id, 'name'=>$name]);
+        return UserData::f
+        dOne(['user_id' => $this->id, 'name'=>$name]);
     }
     public function getUserDataValue($name){
         $obj=$this->getUserData($name);
@@ -377,6 +378,22 @@ class User extends \yii\db\ActiveRecord implements IdentityInterface
 
         }
         return 0;
+    }
+
+    public function getIncrementalFeedFlag(){
+        if (AppConfig::getValue(AppConfig::FORCE_ALL_INCREMENTAL) == 1 ){
+            if (AppConfig::getValue(AppConfig::DISPLAY_DEBUG) == 1 ){
+                echo " INCREMENTAL FORCED ".PHP_EOL;
+            }
+            return true;
+        }
+        if ($this->config->get('export_type') == 1){
+            if (AppConfig::getValue(AppConfig::DISPLAY_DEBUG) == 1 ){
+                echo " INCREMENTAL SET FOR USER ".PHP_EOL;
+            }
+            return true;
+        }
+        return false;
     }
 
 }

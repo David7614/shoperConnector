@@ -433,37 +433,7 @@ class Integrator extends ShoperShops{
         die ("ADDRESSES FIRST");
     }
 
-    public function generateCustomertest($user){
-        echo "initial customers done : ".PHP_EOL;
-        var_dump(IntegrationData::getDataValue('INITIAL_CUSTOMERS_DONE', $user->id));
-        var_dump(IntegrationData::getLastCustomerIntegrationDate($user->id));
-        echo "***".PHP_EOL;
-        $app=$this->prepareConnection();
-        $client = $app->getClient();
-        $resource = new ShoperUser($client);
-        $resource->limit(1);
-        // $resource->filters(['origin'=>0]);
-        // $resource->filters(['active'=>'1']);
-
-        if (IntegrationData::getDataValue('INITIAL_CUSTOMERS_DONE', $user->id) && IntegrationData::getLastCustomerIntegrationDate($user->id)){
-            $resource->filters([
-                // 'origin' => [0,1,2],
-                'updated_at'=>[
-                    '>='=>IntegrationData::getLastCustomerIntegrationDate($user->id)
-                ] 
-            ]);
-        }
-        $resource->order(['user_id']);
-        
-        try{
-            $response=$resource->get();
-            var_dump($response);
-        }catch(\DreamCommerce\ShopAppstoreLib\Exception\Exception $ex) {
-            die($ex->getMessage());
-        }
-        
-        echo "test gen";
-    }
+    
     public function generateCustomer($queue){
         Integrator::shoperLog('- 2.1 Step: Generate customer', $queue->id);
 
@@ -502,7 +472,15 @@ class Integrator extends ShoperShops{
 
         Integrator::shoperLog('- 2.1.4 Step: Generate customer', $queue->id);
 
-        echo "get res".PHP_EOL;
+        echo "[customer] get from api".PHP_EOL;
+
+        if ($queue->getCurrentUser()->_user->getIncrementalFeedFlag()) {
+            if ($queue->page == 0) {
+                Customers::deleteAll(['user_id' => $queue->getCurrentUser()->id]); // delete all obsolete entries
+            }
+            $date2weeksago = date('Y-m-d', strtotime('-2 weeks'));
+            IntegrationData::setLastCustomerIntegrationDate($date2weeksago, $queue->getCurrentUser()->id);
+        }
 
         if (IntegrationData::getDataValue('INITIAL_CUSTOMERS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getLastCustomerIntegrationDate($queue->getCurrentUser()->id)){
             $resource->filters([
@@ -651,7 +629,7 @@ class Integrator extends ShoperShops{
             $resource->page($queue->page+1);
             // filter page
         }
-        
+
         if (IntegrationData::getDataValue('INITIAL_PRODUCTS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id) ){
             echo "CONSTRIAINT".PHP_EOL;
             echo IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id).PHP_EOL;
@@ -674,11 +652,8 @@ class Integrator extends ShoperShops{
         foreach ($response as $res){
             // var_dump($res);
             foreach ($res->translations as $lang=>$trans){
-                if ($res->product_id=='3156'){
-                    // die ("GOCIA");
-                }
                 echo $res->product_id.PHP_EOL;
-                echo "!!!";
+                
                 echo PHP_EOL;
                 $Product=Product::findOne(['user_id'=>$queue->getCurrentUser()->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
                 if (!$Product){
@@ -778,146 +753,6 @@ class Integrator extends ShoperShops{
         return true;
     }
 
-    public function generateProducttest($user){
-
-
-        $app=$this->prepareConnection();
-
-        $client = $app->getClient();
-        $resource = new ShoperProduct($client);
-        $resource->page(8);
-            
-        
-        if (IntegrationData::getDataValue('INITIAL_PRODUCTS_DONE', $user->id) && IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $user->id) ){
-            $resource->filters([
-                // 'origin' => [0,1,2],
-                'updated_at'=>[
-                    '>='=>IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $user->id)
-                    // '>='=>date('Y-m-d')
-                ] 
-            ]);
-        }
-        $resource->limit(1);
-        echo "DATE: ".PHP_EOL;
-        echo IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $user->id).PHP_EOL;
-
-
-        $response=$resource->get();
-        echo "RES NUMBER".PHP_EOL;
-        var_dump($response);
-        die("ONLY DISPLAY");
-        foreach ($response as $res){
-            // var_dump($res);
-            foreach ($res->translations as $lang=>$trans){
-
-                // echo $user->getUrl().'/userdata/public/gfx/'.$res->main_image->gfx_id.'/'.'pic'.'.'.$res->main_image->extension.PHP_EOL;
-                // die ("STOP");
-                echo "****** ".$lang." ******* PROD ".$res->product_id.PHP_EOL;
-                // $Product=Product::findOne(['user_id'=>$user->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
-                // echo $Product->ID.PHP_EOL;
-                // var_dump($Product);
-                // print_r($trans);
-                echo "!!!";
-                $newProductCreated=false;
-                $Product=Product::findOne(['user_id'=>$user->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
-                if (!$Product){
-                    $Product = new Product(['user_id'=>$user->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
-                    $Product->save();
-                    $newProductCreated=true;
-                }
-                $Product->URL=$trans->permalink;
-                $Product->TITLE=$trans->name;
-                echo "!!!".$trans->name.PHP_EOL;
-                $Product->PRICE=str_replace(',','.',$res->stock->comp_promo_price);
-                echo "*** producer ***".PHP_EOL;
-                $Producer=ShoperProducer::findOne([ 'shoper_shops_id'=>$this->id,'producer_id'=>$res->producer_id]);
-                $Product->BRAND=$Producer?$Producer->name:'brak';
-                echo "*** /producer ***".PHP_EOL;
-                $Product->DESCRIPTION=$trans->description;
-                $Product->PRICE_BEFORE_DISCOUNT=str_replace(',','.',$res->stock->price);
-                $Product->PRICE_BUY=str_replace(',','.',$res->stock->price_buying);
-                if ($res->main_image){
-                  $Product->IMAGE=$this->shop_url.'/userdata/public/gfx/'.$res->main_image->gfx_id.'/'.'pic'.'.'.$res->main_image->extension;
-                }
-                $Product->PRODUCT_LINE='brak';
-                echo "CATEGORY OBJ".PHP_EOL;
-                $CategoryObj=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
-                if (!$CategoryObj){
-                    die ("no category imported yet");
-                }
-                $Product->CATEGORYTEXT=$CategoryObj->getFullPath($lang);
-                echo "/CATEGORY OBJ".PHP_EOL;
-                $Product->SHOW=$trans->active;
-                $parametersArray=[];
-                var_dump($res->attributes);
-                echo "*** attributes ***".PHP_EOL;
-                if ($res->attributes){
-                    foreach ($res->attributes as $attributeId=>$attributeOptions){
-                        $Attribute=ShoperAttributes::findOne(['shoper_shops_id'=>$this->id, 'attribute_id'=>$attributeId]);
-                        // echo $attributeId;
-               //          var_dump($Attribute);
-                        foreach ($attributeOptions as $k=>$v){
-                            $Attribute=ShoperAttributes::findOne(['shoper_shops_id'=>$this->id, 'attribute_id'=>$k]);
-                            $paramArr=[];
-                            $paramArr['NAME']=$Attribute->name;
-                            $paramArr['VALUE']=$v;
-                            $parametersArray[]=$paramArr;
-                        }
-                    }
-                }
-                echo "*** /attributes ***".PHP_EOL;
-                $Product->PARAMETERS=serialize($parametersArray);
-                $variantArray=[];
-                if ($res->options){
-                    foreach ($res->options as $optionId){
-                        $variant=[];
-                        $variant['PRODUCT_ID']=$optionId;
-                        $variantArray[]=$variant;
-                        // $variantString.='<VARIANT>';
-                        // $variantString.='<PRODUCT_ID>'.$optionId.'</PRODUCT_ID>';
-                        // $variantString.='<TITLE>'.$optionId.'</TITLE>';
-                        // $variantString.='<DESCRIPTION>'.$optionId.'</DESCRIPTION>';
-                        // $variantString.='<PARAMETERS>
-            //                              <PARAMETER>
-            //                                        <NAME>Size</NAME>
-            //                                        <VALUE>XXL</VALUE>
-            //                              </PARAMETER>
-            //                              <PARAMETER>
-            //                                        <NAME>EAN</NAME>
-            //                                        <VALUE>467891186861118</VALUE>
-            //                              </PARAMETER>
-            //                    </PARAMETERS>';
-            //             $variantString.='<PRICE>'.$optionId.'</PRICE>';
-            //             $variantString.='<PRICE_BUY>'.$optionId.'</PRICE_BUY>';
-            //             $variantString.='<STOCK>'.$optionId.'</STOCK>';
-            //             $variantString.='<IMAGE>'.$optionId.'</IMAGE>';
-            //             $variantString.='<URL>'.$optionId.'</URL>';
-                        // $variantString.='</VARIANT>';
-                    }
-                }
-                $Product->VARIANT=serialize($variantArray);
-                $Product->STOCK=$res->stock->stock;
-                $Product->response=serialize($res);
-                $Product->params_hash=$hash=md5(serialize($res));
-                if ($newProductCreated){
-                    $checkProduct=Product::find()->where(['user_id'=>$user->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang])->andWhere(['!=', 'PRODUCT_ID', $Product->ID])->one();
-                    if ($checkProduct){
-                        // $Product->delete();
-                        continue; // nie ma zapisywania po raz drugi na raz
-                    }
-                }
-                if (!$Product->save()){
-                    print_r($Product->getErrors());
-                }
-            }
-            die ("ONLY 1");
-        }
-        
-        die ();
-
-        return true;
-    }
-
     public function generateStatuses($queue){
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['statuses'])){
@@ -974,9 +809,7 @@ class Integrator extends ShoperShops{
         die ("statuses FIRST");
     }
 
-    public function generateOrderTest($user, $queue) {
-        return $this->generateOrder($queue);
-    }
+    
     public function generateOrder($queue) {
         Integrator::shoperLog('- 2.1 Step: Generate order', $queue->id);
 
@@ -999,6 +832,14 @@ class Integrator extends ShoperShops{
         }
 
         Integrator::shoperLog('- 2.1.2 Step: Generate order', $queue->id);
+
+        if ($queue->getCurrentUser()->_user->getIncrementalFeedFlag()) {
+            if ($queue->page == 0) {
+                Orders::deleteAll(['user_id' => $queue->getCurrentUser()->id]); // delete all obsolete entries
+            }
+            $date2weeksago = date('Y-m-d', strtotime('-2 weeks'));
+            IntegrationData::setData('LAST_ORDERS_DONE', $date2weeksago, $queue->getCurrentUser()->id);
+        }
 
         if (IntegrationData::getDataValue('INITIAL_ORDERS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getDataValue('LAST_ORDERS_DONE', $queue->getCurrentUser()->id) ){
             $resource->filters([
