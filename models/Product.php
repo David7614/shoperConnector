@@ -28,12 +28,12 @@ use Yii;
  */
 class Product extends \yii\db\ActiveRecord
 {
-    public function init()
+    public function beforeSave($insert)
     {
-        parent::init();
-        if ($this->PRICES === null) {
+        if ($insert && empty($this->PRICES)) {
             $this->PRICES = '-';
         }
+        return parent::beforeSave($insert);
     }
 
     /**
