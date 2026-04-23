@@ -32,7 +32,8 @@ class UserData extends \yii\db\ActiveRecord
         return [
             [['user_id', 'name', 'value'], 'required'],
             [['user_id'], 'integer'],
-            [['name', 'value'], 'string', 'max' => 50],
+            [['name'], 'string', 'max' => 50],
+            [['value'], 'string', 'max' => 250],
             [['user_id'], 'exist', 'skipOnError' => true, 'targetClass' => User::className(), 'targetAttribute' => ['user_id' => 'id']],
         ];
     }
