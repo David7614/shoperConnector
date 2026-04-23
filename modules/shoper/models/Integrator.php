@@ -482,7 +482,7 @@ class Integrator extends ShoperShops{
             IntegrationData::setLastCustomerIntegrationDate($date2weeksago, $queue->getCurrentUser()->id);
         }
 
-        if (IntegrationData::getDataValue('INITIAL_CUSTOMERS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getLastCustomerIntegrationDate($queue->getCurrentUser()->id)){
+        if (IntegrationData::getLastCustomerIntegrationDate($queue->getCurrentUser()->id)){
             $resource->filters([
                 // 'origin' => [0,1,2],
                 'updated_at'=>[
@@ -841,7 +841,7 @@ class Integrator extends ShoperShops{
             IntegrationData::setData('LAST_ORDERS_DONE', $date2weeksago, $queue->getCurrentUser()->id);
         }
 
-        if (IntegrationData::getDataValue('INITIAL_ORDERS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getDataValue('LAST_ORDERS_DONE', $queue->getCurrentUser()->id) ){
+        if (IntegrationData::getDataValue('LAST_ORDERS_DONE', $queue->getCurrentUser()->id) ){
             $resource->filters([
                 // 'origin' => [0,1,2],
                 'updated_at'=>[
