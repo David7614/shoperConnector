@@ -7,7 +7,6 @@ use app\models\Queue;
 use app\models\QueueExecutionLog;
 use app\modules\shoper\models\Integrator;
 use app\services\FeedDisabledException;
-use Exception;
 use yii\console\ExitCode;
 
 class QueueRunnerService
@@ -137,20 +136,16 @@ class QueueRunnerService
             Queue::deleteFutureQueuesForUser($queue->current_integrate_user, $type);
             return ExitCode::OK;
 
-        } catch (Exception $e) {
-            Integrator::shoperLog('-- 1.8 Integration Result: ERROR:', $queue->id);
-            Integrator::shoperLog(print_r($e->getCode(), true), $queue->id);
-            Integrator::shoperLog(print_r($e->getMessage(), true), $queue->id);
-            Integrator::shoperLog('-- 1.9 Integration Result: ERROR', $queue->id);
-            echo $e->getMessage();
+        } catch (\Throwable $e) {
+            $this->printThrowable($e);
 
-            if ($e->getMessage() == 'HTTP request failed') {
+            if ($e->getMessage() === 'HTTP request failed') {
                 $queue->setShoperApiDelay();
                 $queue->setPendingStatus();
                 return ExitCode::UNSPECIFIED_ERROR;
             }
 
-            if ($e->getMessage() == 'Retries count exceeded') {
+            if ($e->getMessage() === 'Retries count exceeded') {
                 $queue->setPendingStatus();
                 return ExitCode::UNSPECIFIED_ERROR;
             }
@@ -162,6 +157,20 @@ class QueueRunnerService
 
             $queue->setErrorStatus($e->getMessage());
             return ExitCode::UNSPECIFIED_ERROR;
+        }
+    }
+
+    private function printThrowable(\Throwable $e): void
+    {
+        fwrite(STDERR, PHP_EOL);
+        fwrite(STDERR, '=== ' . get_class($e) . ' ===' . PHP_EOL);
+        fwrite(STDERR, 'Message : ' . $e->getMessage() . PHP_EOL);
+        fwrite(STDERR, 'File    : ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL);
+        fwrite(STDERR, 'Code    : ' . $e->getCode() . PHP_EOL);
+        fwrite(STDERR, 'Trace   :' . PHP_EOL . $e->getTraceAsString() . PHP_EOL);
+        if ($e->getPrevious()) {
+            fwrite(STDERR, '--- Caused by ---' . PHP_EOL);
+            $this->printThrowable($e->getPrevious());
         }
     }
 
