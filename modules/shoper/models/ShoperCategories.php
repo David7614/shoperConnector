@@ -100,7 +100,12 @@ class ShoperCategories extends \yii\db\ActiveRecord
         $path=$this->crawlPath();
         $path=array_reverse($path);
         foreach ($path as $item){
-            $langPath[]=$item->getTranslated($lang)->name;
+            $translationCat=$item->getTranslated($lang);
+            if ($translationCat){
+                $langPath[]=$item->getTranslated($lang)->name;
+            }else{
+                $langPath[]=$item->category_id.' no '.$lang.'translation ';
+            }
         }
         // var_dump($path);
         return implode('|',$langPath);
