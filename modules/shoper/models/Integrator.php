@@ -22,6 +22,7 @@ use \app\models\Product;
 use \app\models\Customers;
 use \app\models\Orders;
 use app\models\IntegrationData;
+use app\services\FeedStorageService;
 
 class Integrator extends ShoperShops{
 
@@ -1190,7 +1191,12 @@ class Integrator extends ShoperShops{
             $prodChild->addChild('STOCK', $product->STOCK);
         }
         // print_r($products->asXML());
-        if (file_put_contents($this->getProductsFile(), $products->asXML())){
+        $storage = $this->getStorage();
+        if ($storage) {
+            $storage->put($this->getMinioProductsKey(), $products->asXML(), 'application/xml');
+            return true;
+        }
+        if (file_put_contents($this->getProductsFile(), $products->asXML())) {
             return true;
         }
 
@@ -1206,7 +1212,12 @@ class Integrator extends ShoperShops{
             $item->addChild('URL', $category->getTranslated()->permalink);
             $category->getChildren($item);
         }
-        if (file_put_contents($this->getCategoriesFile(), $categories->asXML())){
+        $storage = $this->getStorage();
+        if ($storage) {
+            $storage->put($this->getMinioCategoriesKey(), $categories->asXML(), 'application/xml');
+            return true;
+        }
+        if (file_put_contents($this->getCategoriesFile(), $categories->asXML())) {
             return true;
         }
 
@@ -1275,7 +1286,12 @@ class Integrator extends ShoperShops{
         }*/
 
         echo "put tp ".$this->getCustomersFile().PHP_EOL;
-        if (file_put_contents($this->getCustomersFile(), $customers->asXML())){
+        $storage = $this->getStorage();
+        if ($storage) {
+            $storage->put($this->getMinioCustomersKey(), $customers->asXML(), 'application/xml');
+            return true;
+        }
+        if (file_put_contents($this->getCustomersFile(), $customers->asXML())) {
             return true;
         }
 
@@ -1285,6 +1301,16 @@ class Integrator extends ShoperShops{
 
     private function createCustomerXml()
     {
+        $storage = $this->getStorage();
+        if ($storage) {
+            $combined = $storage->collectAndDeleteChunks($this->getMinioCustomersTempKey());
+            $customer = new \SimpleXMLElement('<CUSTOMERS/>');
+            $customer->addChild('CUSTOMER');
+            $xml = str_replace('<CUSTOMER/>', $combined, $customer->asXML());
+            $storage->put($this->getMinioCustomersKey(), $xml, 'application/xml');
+            return 10;
+        }
+
         $file=$this->getCustomersFile();
         $temp=$this->getCustomersTempFile();
 
@@ -1301,6 +1327,9 @@ class Integrator extends ShoperShops{
 
         $integrationDataCurrentPage = $queue->page;
         $integrationDataMaxPage = $queue->max_page;
+        $storage = $this->getStorage();
+        $chunkBuffer = '';
+        $chunkIndex = $integrationDataCurrentPage;
         $page_size = self::XML_PAGE_SIZE;
 
         $customers_query = Customers::find()->where(['user_id' => $queue->getCurrentUser()->id]);
@@ -1371,9 +1400,13 @@ class Integrator extends ShoperShops{
                     }
                 }
 
-                $file_handle = fopen($temp, 'a+');            
-                fwrite($file_handle, $item->asXml());
-                fclose($file_handle);
+                if ($storage) {
+                    $chunkBuffer .= $item->asXml();
+                } else {
+                    $file_handle = fopen($temp, 'a+');
+                    fwrite($file_handle, $item->asXml());
+                    fclose($file_handle);
+                }
 
             }
         }else{
@@ -1391,11 +1424,19 @@ class Integrator extends ShoperShops{
                 $item->addChild('NLF_TIME', $this->getCorrectSambaDate($subscriber->dateadd));
 
 
-                $file_handle = fopen($temp, 'a+');            
-                fwrite($file_handle, $item->asXml());
-                fclose($file_handle);
+                if ($storage) {
+                    $chunkBuffer .= $item->asXml();
+                } else {
+                    $file_handle = fopen($temp, 'a+');
+                    fwrite($file_handle, $item->asXml());
+                    fclose($file_handle);
+                }
 
             }
+        }
+
+        if ($storage && $chunkBuffer !== '') {
+            $storage->putChunk($this->getMinioCustomersTempKey(), $chunkIndex, $chunkBuffer);
         }
 
         $page++;
@@ -1449,7 +1490,12 @@ class Integrator extends ShoperShops{
                 $prodItem->addChild('PRICE', $product['price']);
             }
         }
-        if (file_put_contents($this->getOrdersFile(), $orders->asXML())){
+        $storage = $this->getStorage();
+        if ($storage) {
+            $storage->put($this->getMinioOrdersKey(), $orders->asXML(), 'application/xml');
+            return true;
+        }
+        if (file_put_contents($this->getOrdersFile(), $orders->asXML())) {
             return true;
         }
 
@@ -1472,6 +1518,17 @@ class Integrator extends ShoperShops{
     public function getOrdersFile(){
         return Yii::$app->basePath.'/modules/shoper/files/'.$this->shop.'.orders.xml';
     }
+
+    private function getStorage(): ?FeedStorageService
+    {
+        return FeedStorageService::isConfigured() ? FeedStorageService::create() : null;
+    }
+
+    public function getMinioCustomersKey(): string     { return 'customer/' . $this->shop . '.customers.xml'; }
+    public function getMinioCustomersTempKey(): string  { return 'customer/' . $this->shop . '.customers.temp'; }
+    public function getMinioProductsKey(): string      { return 'product/'  . $this->shop . '.products.xml'; }
+    public function getMinioCategoriesKey(): string    { return 'category/' . $this->shop . '.categories.xml'; }
+    public function getMinioOrdersKey(): string        { return 'order/'    . $this->shop . '.orders.xml'; }
 
 
     public function getCorrectSambaDate($date): string
