@@ -142,6 +142,8 @@ class Integrator extends ShoperShops{
     }
 
     public function generateAttributes($queue){
+        echo "[product] attributes start" . PHP_EOL;
+
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['attributes'])){
             $parameters['attributes']=[];
@@ -495,6 +497,7 @@ class Integrator extends ShoperShops{
     }
 
     public function generateProducers($queue){
+        echo "[product] producers start" . PHP_EOL;
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['producers'])){
             $parameters['producers']=[];
