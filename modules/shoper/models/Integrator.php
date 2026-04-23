@@ -737,8 +737,9 @@ class Integrator extends ShoperShops{
             if (!$this->generateStatuses($queue)){
                 return false;
             }
-            // $this->generateOrdersPositions($queue);
         }
+
+        $user = $queue->getCurrentUser();
 
         $app=$this->prepareConnection();
 
@@ -748,20 +749,19 @@ class Integrator extends ShoperShops{
             $resource->page($queue->page + 1);
         }
 
-        if ($queue->getCurrentUser()->getIncrementalFeedFlag()) {
+        $lastOrdersDone = IntegrationData::getDataValue('LAST_ORDERS_DONE', $user->id);
+
+        if ($user->getIncrementalFeedFlag()) {
             if ($queue->page == 0) {
-                Orders::deleteAll(['user_id' => $queue->getCurrentUser()->id]); // delete all obsolete entries
+                Orders::deleteAll(['user_id' => $user->id]);
             }
-            $date2weeksago = date('Y-m-d', strtotime('-2 weeks'));
-            IntegrationData::setData('LAST_ORDERS_DONE', $date2weeksago, $queue->getCurrentUser()->id);
+            $lastOrdersDone = date('Y-m-d', strtotime('-2 weeks'));
+            IntegrationData::setData('LAST_ORDERS_DONE', $lastOrdersDone, $user->id);
         }
 
-        if (IntegrationData::getDataValue('LAST_ORDERS_DONE', $queue->getCurrentUser()->id) ){
+        if ($lastOrdersDone) {
             $resource->filters([
-                // 'origin' => [0,1,2],
-                'updated_at'=>[
-                    '>='=>IntegrationData::getDataValue('LAST_ORDERS_DONE', $queue->getCurrentUser()->id)
-                ] 
+                'updated_at' => ['>=' => $lastOrdersDone]
             ]);
         }
 
@@ -775,21 +775,19 @@ class Integrator extends ShoperShops{
         $queue->page = $response->page;
         $queue->save();
 
-        foreach ($response as $res) {
-            $Order = Orders::find()->where(['order_id' => $res->order_id])
-                ->andWhere(['user_id' => $queue->getCurrentUser()->id])
-                ->one();
+        $statusMap = [];
+        foreach (ShoperStatus::find()->where(['shoper_shops_id' => $this->id])->all() as $s) {
+            $statusMap[$s->status_id] = $s->sambaStatus;
+        }
 
-            if (!$Order) {
-                $Order = new Orders(['user_id' => $queue->getCurrentUser()->id, 'order_id' => $res->order_id]);
-            }
+        foreach ($response as $res) {
+            $Order = Orders::find()->where(['order_id' => $res->order_id, 'user_id' => $user->id])->one()
+                ?? new Orders(['user_id' => $user->id, 'order_id' => $res->order_id]);
 
             $Order->customer_id = $res->user_id;
             $Order->created_on = $res->date;
             $Order->finished_on = $res->date;
-
-            $ShoperStatus = ShoperStatus::findOne(['shoper_shops_id' => $this->id, 'status_id' => $res->status_id]);
-            $Order->status = $ShoperStatus->sambaStatus;
+            $Order->status = $statusMap[$res->status_id] ?? null;
             $Order->email = $res->email;
             $Order->phone = $res->delivery_address->phone;
             $Order->zip_code = $res->delivery_address->postcode;
@@ -798,16 +796,14 @@ class Integrator extends ShoperShops{
 
             $orderProduct = new OrderProduct($client);
             $orderProduct->filters(['order_id' => $res->order_id]);
-            $Products = $orderProduct->get();
             $items = [];
-
-            foreach ($Products as $orderItem) {
-                $item['product_id'] = $orderItem->product_id;
-                $item['amount'] = $orderItem->quantity;
-                $item['price'] = $orderItem->quantity*$orderItem->price;
-                $items[] = $item;
+            foreach ($orderProduct->get() as $orderItem) {
+                $items[] = [
+                    'product_id' => $orderItem->product_id,
+                    'amount'     => $orderItem->quantity,
+                    'price'      => $orderItem->quantity * $orderItem->price,
+                ];
             }
-
             $Order->order_positions = serialize($items);
 
             if (!$Order->save()) {
@@ -815,9 +811,9 @@ class Integrator extends ShoperShops{
             }
         }
 
-        if ($queue->max_page <= $queue->page){
-            IntegrationData::setData('LAST_ORDERS_DONE', date('Y-m-d'), $queue->getCurrentUser()->id);
-            IntegrationData::setData('INITIAL_ORDERS_DONE', 1, $queue->getCurrentUser()->id);
+        if ($queue->max_page <= $queue->page) {
+            IntegrationData::setData('LAST_ORDERS_DONE', date('Y-m-d'), $user->id);
+            IntegrationData::setData('INITIAL_ORDERS_DONE', 1, $user->id);
         }
 
         return true;
