@@ -312,7 +312,6 @@ class AdminController extends Controller
             \app\modules\xml_generator\src\XmlFeed::CATEGORY,
             \app\modules\xml_generator\src\XmlFeed::ORDER,
             \app\modules\xml_generator\src\XmlFeed::TAGS,
-            'countries',
         ];
 
         foreach ($types as $type) {
@@ -580,7 +579,6 @@ class AdminController extends Controller
             'customer'         => 'Klienci',
             'category'         => 'Kategorie',
             'tag'              => 'Tagi',
-            'countries'        => 'Kraje',
         ];
 
         $execLogs     = in_array('health', $requested) ? QueueExecutionLog::getRecentStats(50)  : [];

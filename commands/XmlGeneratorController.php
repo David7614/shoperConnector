@@ -25,7 +25,6 @@ use app\services\QueueRunnerService;
 
 integration_types:
 category
-countries
 customer
 order
 product
@@ -49,73 +48,12 @@ class XmlGeneratorController extends Controller
         Queue::prepareQueue(XmlFeed::CATEGORY);
         Queue::prepareQueue(XmlFeed::ORDER);
         Queue::prepareQueue(XmlFeed::TAGS);
-        Queue::prepareQueue('countries');
     }
 
     public function actionGenerateTags($forceId=0)
     {
         return (new QueueRunnerService())->run(XmlFeed::TAGS, ['forceId'=>$forceId]);
     }
-    public function actionGenerateCountries($forceId=0)
-    {
-        $type='countries';
-        $what = (!isset($this->what) || $this->what == null) ? $this->what : null;
-        $queue = Queue::findLastForType($type, ['forceId'=>$forceId]);
-
-        if($queue == null) {
-            echo "nothing to do for type ".$type.PHP_EOL;
-            return ExitCode::OK;
-        }
-        $queue->setRunningStatus(); // back to pending
-        echo "QUEUE ID ".$queue->id.PHP_EOL;
-        $user = $queue->getCurrentUser();
-        if ($user->shop_type=='shoper'){
-            $queue->setExecutedStatus();
-            $queue->setCountErrors(0);
-            return true;
-            die ("Shoper off");
-        }
-        echo $user->id;
-        $connection = new Connection($user);
-
-        $customersList= Customers::find()->where(['user_id'=>$user->id, 'country'=>''])
-            ->andWhere(['!=','email', ''])
-            ->limit(100)->all();
-
-        if (!$customersList){
-            $queue->setExecutedStatus();
-            $queue->setCountErrors(0);
-            return true;
-        }
-
-        $gate='http://'.$user->username.'/api/?gate=clients/getDeliveryAddress/169/soap/wsdl&lang=pol';
-        $client=new IdioselClient($gate, $connection->getToken()->getToken());
-        foreach ($customersList as $customer){
-            echo "ID ".$customer->id.PHP_EOL;
-            // var_dump($customer);
-            $queue->page++;
-            echo $customer->email.PHP_EOL;
-            $request=new SoapRequest();
-            $request->addParam('clientLogin', $customer->email);  
-            $response = $client->getDeliveryAddress($request->getRequest());
-            // echo count($response->clientDeliveryAddressesResults);
-            $lastIndex=count($response->clientDeliveryAddressesResults)-1;
-            if ($lastIndex<0){
-                echo "no data ".PHP_EOL;
-                $customer->country='no data';
-                $customer->save();
-                var_dump($customer->getErrors());
-                continue;
-            }
-            var_dump($response->clientDeliveryAddressesResults[$lastIndex]->clientDeliveryAddressCountry);
-            $customer->country=$response->clientDeliveryAddressesResults[$lastIndex]->clientDeliveryAddressCountry;
-            $customer->save();
-            var_dump($customer->getErrors());
-        }
-        $queue->setPendingStatus();
-    }
-
-
     public function actionGenerateProducts($forceId=0, $forcePage=null)
     {
         return (new QueueRunnerService())->run(XmlFeed::PRODUCT, ['forceId'=>$forceId, 'forcePage'=>$forcePage]);
@@ -179,6 +117,11 @@ class XmlGeneratorController extends Controller
     public function actionLoopCategories(int $limitSeconds = 540)
     {
         return $this->loopQueue(XmlFeed::CATEGORY, [], $limitSeconds);
+    }
+
+    public function actionLoopTags(int $limitSeconds = 540)
+    {
+        return $this->loopQueue(XmlFeed::TAGS, [], $limitSeconds);
     }
 
     private function loopQueue(string $type, array $config = [], int $limitSeconds = 540): int
