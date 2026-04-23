@@ -340,8 +340,7 @@ class User extends \yii\db\ActiveRecord implements IdentityInterface
     }
 
     public function getUserData($name){
-        return UserData::f
-        dOne(['user_id' => $this->id, 'name'=>$name]);
+        return UserData::findOne(['user_id' => $this->id, 'name'=>$name]);
     }
     public function getUserDataValue($name){
         $obj=$this->getUserData($name);
