@@ -417,7 +417,7 @@ class Queue extends \yii\db\ActiveRecord
     }
     public static function findLastForType(string $type, $userList=null)
     {
-        echo "FIND LAST TYPE FOR QUEUE ".PHP_EOL;
+        echo "[".$type."] queue determinig ".PHP_EOL;
         $queue_items = self::find()->where(['integration_type' => $type, 'integrated' => self::RUNNING])
             ->andWhere(['<', 'next_integration_date', date('Y-m-d H:i:s')]);
         if ($userList){
@@ -427,11 +427,8 @@ class Queue extends \yii\db\ActiveRecord
         $queue_items=$queue_items->all();
 
         if ($queue_items) {
-            echo "jobs running ".PHP_EOL;
             $preventUsers = [];
 
-
-            var_dump($queue_items);
             foreach ($queue_items as $itm) {
                 $preventUsers[] = $itm->current_integrate_user;
             }
@@ -447,13 +444,11 @@ class Queue extends \yii\db\ActiveRecord
                 ->orderBy(['next_integration_date' => SORT_ASC]);
             $queue_item=$queue_item->one();
 
-            // var_dump($queue_item);    
 
             if ($queue_item == null) {
                 $queue_item = $queue_items[0];
             }
         } else {
-            echo "nothing running yet ".PHP_EOL;
             $queue_item = self::find()->where(['integration_type' => $type, 'integrated' => self::PENDING])
                 ->orderBy(['next_integration_date' => SORT_ASC])
                 ->andWhere(['<', 'next_integration_date', date('Y-m-d H:i:s')]);
@@ -465,7 +460,6 @@ class Queue extends \yii\db\ActiveRecord
                 return $queue_item;
             }
         }
-        // var_dump($queue_item);
         $queue_item = self::checkShoperApiDelay($queue_item);
 
         return $queue_item;
@@ -545,7 +539,7 @@ class Queue extends \yii\db\ActiveRecord
      */
     public static function checkShoperApiDelay($queue_item) {
         if (($user = $queue_item->getCurrentUser()) && $user->shop_type == 'shoper') {
-            var_dump($queue_item);
+            
             $parameters = $queue_item->additionalParameters;
 
             if (!isset($parameters['shoper_api_delay'])) {
