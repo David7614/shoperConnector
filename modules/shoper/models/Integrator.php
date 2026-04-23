@@ -589,6 +589,7 @@ class Integrator extends ShoperShops{
                 if (!$Product){
                     $Product = new Product(['user_id'=>$queue->getCurrentUser()->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
                 }
+                $Product->from_api_page=$queue->page;     
                 $Product->URL=$trans->permalink;
                 $Product->TITLE=$trans->name;
                 $Product->PRICE=str_replace(',','.',$res->stock->comp_promo_price);
