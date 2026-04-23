@@ -21,6 +21,7 @@ use DreamCommerce\ShopAppstoreLib\Resource\MetafieldValue;
 use \app\models\Product;
 use \app\models\Customers;
 use \app\models\Orders;
+use \app\models\Queue;
 use app\models\IntegrationData;
 use app\services\FeedStorageService;
 
