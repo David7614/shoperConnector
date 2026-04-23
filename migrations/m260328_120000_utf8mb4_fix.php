@@ -11,6 +11,7 @@ class m260328_120000_utf8mb4_fix extends Migration
 
     public function safeUp()
     {
+        $this->execute("ALTER TABLE `xml_feed_queue` MODIFY `executed_at` DATETIME NULL DEFAULT NULL, MODIFY `finished_at` DATETIME NULL DEFAULT NULL");
         foreach ($this->tables as $table) {
             $this->execute("ALTER TABLE `{$table}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
         }
