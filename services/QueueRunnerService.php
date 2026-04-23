@@ -83,7 +83,7 @@ class QueueRunnerService
         }
 
         try {
-            echo $queue->integration_type . " !!!# " . PHP_EOL;
+            echo "[".$queue->integration_type."] page " .$queue->page. " of ".$queue->max_page . PHP_EOL;
 
             $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);
 
