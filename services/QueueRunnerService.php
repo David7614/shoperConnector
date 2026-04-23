@@ -162,14 +162,14 @@ class QueueRunnerService
 
     private function printThrowable(\Throwable $e): void
     {
-        fwrite(STDERR, PHP_EOL);
-        fwrite(STDERR, '=== ' . get_class($e) . ' ===' . PHP_EOL);
-        fwrite(STDERR, 'Message : ' . $e->getMessage() . PHP_EOL);
-        fwrite(STDERR, 'File    : ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL);
-        fwrite(STDERR, 'Code    : ' . $e->getCode() . PHP_EOL);
-        fwrite(STDERR, 'Trace   :' . PHP_EOL . $e->getTraceAsString() . PHP_EOL);
+        echo PHP_EOL;
+        echo '=== ' . get_class($e) . ' ===' . PHP_EOL;
+        echo 'Message : ' . $e->getMessage() . PHP_EOL;
+        echo 'File    : ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+        echo 'Code    : ' . $e->getCode() . PHP_EOL;
+        echo 'Trace   :' . PHP_EOL . $e->getTraceAsString() . PHP_EOL;
         if ($e->getPrevious()) {
-            fwrite(STDERR, '--- Caused by ---' . PHP_EOL);
+            echo '--- Caused by ---' . PHP_EOL;
             $this->printThrowable($e->getPrevious());
         }
     }
