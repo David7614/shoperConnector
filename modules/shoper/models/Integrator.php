@@ -555,24 +555,21 @@ class Integrator extends ShoperShops{
             }
         }
 
-
-        $app=$this->prepareConnection();
+        $user = $queue->getCurrentUser();
+        $app  = $this->prepareConnection();
 
         $client = $app->getClient();
         $resource = new ShoperProduct($client);
         if ($queue->page){
             $resource->page($queue->page+1);
-            // filter page
         }
 
-        if (IntegrationData::getDataValue('INITIAL_PRODUCTS_DONE', $queue->getCurrentUser()->id) && IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id) ){
-            echo "[product] incremental from " . IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id) . PHP_EOL;
-            $resource->filters([
-                // 'origin' => [0,1,2],
-                'updated_at'=>[
-                    '>='=>IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $queue->getCurrentUser()->id)
-                ] 
-            ]);
+        $initialDone = IntegrationData::getDataValue('INITIAL_PRODUCTS_DONE', $user->id);
+        $lastDone    = IntegrationData::getDataValue('LAST_PRODUCTS_DONE', $user->id);
+
+        if ($initialDone && $lastDone) {
+            echo "[product] incremental from " . $lastDone . PHP_EOL;
+            $resource->filters(['updated_at' => ['>=' => $lastDone]]);
         }
 
         echo "[product] fetching from API" . PHP_EOL;
@@ -582,95 +579,85 @@ class Integrator extends ShoperShops{
         }
         $queue->page=$response->page;
         $queue->save();
+
+        $producerMap = [];
+        foreach (ShoperProducer::find()->where(['shoper_shops_id' => $this->id])->all() as $p) {
+            $producerMap[$p->producer_id] = $p->name;
+        }
+
+        $categoryMap = [];
+        foreach (ShoperCategories::find()->where(['shoper_shops_id' => $this->id])->all() as $c) {
+            $categoryMap[$c->category_id] = $c;
+        }
+
+        $attributeMap = [];
+        foreach (ShoperAttributes::find()->where(['shoper_shops_id' => $this->id])->all() as $a) {
+            $attributeMap[$a->attribute_id] = $a;
+        }
+
+        $userUrl = $user->getUrl();
+
         foreach ($response as $res){
-            // var_dump($res);
             foreach ($res->translations as $lang=>$trans){
-                $Product=Product::findOne(['user_id'=>$queue->getCurrentUser()->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
-                if (!$Product){
-                    $Product = new Product(['user_id'=>$queue->getCurrentUser()->id, 'PRODUCT_ID'=>$res->product_id, 'translation'=>$lang]);
+                $Product = Product::findOne(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang])
+                    ?? new Product(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang]);
+
+                $Product->from_api_page = $queue->page;
+                $Product->URL   = $trans->permalink;
+                $Product->TITLE = $trans->name;
+                $Product->PRICE = str_replace(',', '.', $res->stock->comp_promo_price);
+                $Product->BRAND = $producerMap[$res->producer_id] ?? 'brak';
+                $Product->DESCRIPTION           = $trans->description;
+                $Product->PRICE_BEFORE_DISCOUNT = str_replace(',', '.', $res->stock->price);
+                $Product->PRICE_BUY             = str_replace(',', '.', $res->stock->price_buying);
+
+                if ($res->main_image) {
+                    $imgName = (isset($res->main_image->unic_name) && $res->main_image->unic_name !== '')
+                        ? $res->main_image->unic_name
+                        : $res->main_image->gfx_id;
+                    $Product->IMAGE = $userUrl . '/userdata/public/gfx/' . $imgName . '/pic.' . $res->main_image->extension;
                 }
-                $Product->from_api_page=$queue->page;     
-                $Product->URL=$trans->permalink;
-                $Product->TITLE=$trans->name;
-                $Product->PRICE=str_replace(',','.',$res->stock->comp_promo_price);
-                $Producer=ShoperProducer::findOne([ 'shoper_shops_id'=>$this->id,'producer_id'=>$res->producer_id]);
-                $Product->BRAND=$Producer?$Producer->name:'brak';
-                $Product->DESCRIPTION=$trans->description;
-                $Product->PRICE_BEFORE_DISCOUNT=str_replace(',','.',$res->stock->price);
-                $Product->PRICE_BUY=str_replace(',','.',$res->stock->price_buying);
-                if ($res->main_image){
-                    // $queue->getCurrentUser()->getUrl() - ale nie do końća bo nadal kwestia samej ściezki
-                    if (isset($res->main_image->unic_name) && $res->main_image->unic_name!=''){
-                        $Product->IMAGE=$queue->getCurrentUser()->getUrl().'/userdata/public/gfx/'.$res->main_image->unic_name.'/'.'pic'.'.'.$res->main_image->extension;
-                    }else{
-                        $Product->IMAGE=$queue->getCurrentUser()->getUrl().'/userdata/public/gfx/'.$res->main_image->gfx_id.'/'.'pic'.'.'.$res->main_image->extension;
-                    }
+
+                $Product->PRODUCT_LINE = 'brak';
+
+                if (!isset($categoryMap[$res->category_id])) {
+                    die("[product] category missing " . $res->category_id . " for shoper_shop " . $this->id);
                 }
-                $Product->PRODUCT_LINE='brak';
-                $CategoryObj=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
-                if (!$CategoryObj){
-                    die ("[product] category missing ".$res->category_id." for shoper_shop ".$this->id);
-                }
-                $Product->CATEGORYTEXT=$CategoryObj->getFullPath($lang);
-                $Product->SHOW=$trans->active;
-                $parametersArray=[];
-                if ($res->attributes){
-                    foreach ($res->attributes as $attributeId=>$attributeOptions){
-                        $Attribute=ShoperAttributes::findOne(['shoper_shops_id'=>$this->id, 'attribute_id'=>$attributeId]);
-                        // echo $attributeId;
-               //          var_dump($Attribute);
-                        foreach ($attributeOptions as $k=>$v){
-                            $Attribute=ShoperAttributes::findOne(['shoper_shops_id'=>$this->id, 'attribute_id'=>$k]);
-                            $paramArr=[];
-                            $paramArr['NAME']=$Attribute->name;
-                            $paramArr['VALUE']=$v;
-                            $parametersArray[]=$paramArr;
+                $Product->CATEGORYTEXT = $categoryMap[$res->category_id]->getFullPath($lang);
+                $Product->SHOW = $trans->active;
+
+                $parametersArray = [];
+                if ($res->attributes) {
+                    foreach ($res->attributes as $attributeOptions) {
+                        foreach ($attributeOptions as $k => $v) {
+                            if (isset($attributeMap[$k])) {
+                                $parametersArray[] = ['NAME' => $attributeMap[$k]->name, 'VALUE' => $v];
+                            }
                         }
                     }
                 }
-                $Product->PARAMETERS=serialize($parametersArray);
-                $variantArray=[];
-                if ($res->options){
-                    foreach ($res->options as $optionId){
-                        $variant=[];
-                        $variant['PRODUCT_ID']=$optionId;
-                        $variantArray[]=$variant;
-                        // $variantString.='<VARIANT>';
-                        // $variantString.='<PRODUCT_ID>'.$optionId.'</PRODUCT_ID>';
-                        // $variantString.='<TITLE>'.$optionId.'</TITLE>';
-                        // $variantString.='<DESCRIPTION>'.$optionId.'</DESCRIPTION>';
-                        // $variantString.='<PARAMETERS>
-            //                              <PARAMETER>
-            //                                        <NAME>Size</NAME>
-            //                                        <VALUE>XXL</VALUE>
-            //                              </PARAMETER>
-            //                              <PARAMETER>
-            //                                        <NAME>EAN</NAME>
-            //                                        <VALUE>467891186861118</VALUE>
-            //                              </PARAMETER>
-            //                    </PARAMETERS>';
-            //             $variantString.='<PRICE>'.$optionId.'</PRICE>';
-            //             $variantString.='<PRICE_BUY>'.$optionId.'</PRICE_BUY>';
-            //             $variantString.='<STOCK>'.$optionId.'</STOCK>';
-            //             $variantString.='<IMAGE>'.$optionId.'</IMAGE>';
-            //             $variantString.='<URL>'.$optionId.'</URL>';
-                        // $variantString.='</VARIANT>';
+                $Product->PARAMETERS = serialize($parametersArray);
+
+                $variantArray = [];
+                if ($res->options) {
+                    foreach ($res->options as $optionId) {
+                        $variantArray[] = ['PRODUCT_ID' => $optionId];
                     }
                 }
-                $Product->VARIANT=serialize($variantArray);
-                $Product->STOCK=$res->stock->stock;
-                $Product->response=serialize($res);
-                $Product->params_hash=$hash=md5(serialize($res));
+                $Product->VARIANT     = serialize($variantArray);
+                $Product->STOCK       = $res->stock->stock;
+                $Product->response    = serialize($res);
+                $Product->params_hash = md5(serialize($res));
+
                 if (!$Product->save()){
                     print_r($Product->getErrors());
                 }
             }
         }
 
-
         if ($queue->max_page <= $queue->page){
-            IntegrationData::setData('LAST_PRODUCTS_DONE', date('Y-m-d'), $queue->getCurrentUser()->id);
-            IntegrationData::setData('INITIAL_PRODUCTS_DONE', 1, $queue->getCurrentUser()->id);
+            IntegrationData::setData('LAST_PRODUCTS_DONE', date('Y-m-d'), $user->id);
+            IntegrationData::setData('INITIAL_PRODUCTS_DONE', 1, $user->id);
         }
 
         return true;
