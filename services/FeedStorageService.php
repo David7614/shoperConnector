@@ -192,6 +192,21 @@ class FeedStorageService
         } while (!empty($result['IsTruncated']));
     }
 
+    public function stream(string $key, int $chunkSize = 1048576): void
+    {
+        $result = $this->s3->getObject([
+            'Bucket' => $this->bucket,
+            'Key'    => $key,
+            '@http'  => ['stream' => true],
+        ]);
+        $body = $result['Body'];
+        while (!$body->eof()) {
+            echo $body->read($chunkSize);
+            if (ob_get_level()) ob_flush();
+            flush();
+        }
+    }
+
     public function get(string $key): string
     {
         $result = $this->s3->getObject([

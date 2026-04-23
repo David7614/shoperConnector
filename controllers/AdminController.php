@@ -202,24 +202,55 @@ class AdminController extends Controller
         $useStorage = \app\services\FeedStorageService::isConfigured();
         $storage    = $useStorage ? \app\services\FeedStorageService::create() : null;
 
+        $shoperIntegrator = null;
+        if ($user->shop_type === 'shoper') {
+            $shoperIntegrator = \app\modules\shoper\models\Integrator::findOne(['shop_url' => 'https://' . $user->username]);
+        }
+        $shoperMinioKeyMap = [
+            'product'  => 'getMinioProductsKey',
+            'customer' => 'getMinioCustomersKey',
+            'order'    => 'getMinioOrdersKey',
+            'category' => 'getMinioCategoriesKey',
+        ];
+        $shoperLocalFileMap = [
+            'product'  => 'getProductsFile',
+            'customer' => 'getCustomersFile',
+            'order'    => 'getOrdersFile',
+            'category' => 'getCategoriesFile',
+        ];
+
         foreach ($feedMeta as $key => [$storageType, $tag]) {
             $filesInfo[$key] = ['status' => 'gotowy', 'elements' => 0];
 
-            if ($useStorage) {
+            if ($shoperIntegrator) {
+                if ($useStorage) {
+                    $storageKey = $shoperIntegrator->{$shoperMinioKeyMap[$storageType]}();
+                    if (!$storage->exists($storageKey)) {
+                        $filesInfo[$key]['status'] = 'Nie gotowy';
+                    } else {
+                        $filesInfo[$key]['elements'] = substr_count($storage->get($storageKey), '<' . $tag . '>');
+                    }
+                } else {
+                    $fileName = $shoperIntegrator->{$shoperLocalFileMap[$storageType]}();
+                    if (!is_file($fileName)) {
+                        $filesInfo[$key]['status'] = 'Nie gotowy';
+                    } else {
+                        $filesInfo[$key]['elements'] = substr_count(file_get_contents($fileName), '<' . $tag . '>');
+                    }
+                }
+            } elseif ($useStorage) {
                 $storageKey = $storageType . '/' . $user->uuid . '/' . $storageType . '.xml';
                 if (!$storage->exists($storageKey)) {
                     $filesInfo[$key]['status'] = 'Nie gotowy';
                 } else {
-                    $xml = $storage->get($storageKey);
-                    $filesInfo[$key]['elements'] = substr_count($xml, '<' . $tag . '>');
+                    $filesInfo[$key]['elements'] = substr_count($storage->get($storageKey), '<' . $tag . '>');
                 }
             } else {
                 $fileName = $localPaths[$key];
                 if (!is_file($fileName)) {
                     $filesInfo[$key]['status'] = 'Nie gotowy';
                 } else {
-                    $xml = file_get_contents($fileName);
-                    $filesInfo[$key]['elements'] = substr_count($xml, '<' . $tag . '>');
+                    $filesInfo[$key]['elements'] = substr_count(file_get_contents($fileName), '<' . $tag . '>');
                 }
             }
         }
@@ -793,20 +824,47 @@ class AdminController extends Controller
             ? \app\services\FeedStorageService::create()
             : null;
 
-        foreach ($tagMap as $type => $tag) {
-            if ($storage) {
-                $key = $type . '/' . $user->uuid . '/' . $type . '.xml';
-                if ($storage->exists($key)) {
-                    $counts[$type] = substr_count($storage->get($key), '<' . $tag . '>');
+        if ($user->shop_type === 'shoper') {
+            $integrator = \app\modules\shoper\models\Integrator::findOne(['shop_url' => 'https://' . $user->username]);
+            $minioKeyMap = [
+                'product'  => 'getMinioProductsKey',
+                'customer' => 'getMinioCustomersKey',
+                'order'    => 'getMinioOrdersKey',
+                'category' => 'getMinioCategoriesKey',
+            ];
+            $localFileMap = [
+                'product'  => 'getProductsFile',
+                'customer' => 'getCustomersFile',
+                'order'    => 'getOrdersFile',
+                'category' => 'getCategoriesFile',
+            ];
+            foreach ($tagMap as $type => $tag) {
+                if ($storage) {
+                    $key = $integrator->{$minioKeyMap[$type]}();
+                    $counts[$type] = $storage->exists($key)
+                        ? substr_count($storage->get($key), '<' . $tag . '>')
+                        : null;
                 } else {
-                    $counts[$type] = null;
+                    $file = $integrator->{$localFileMap[$type]}();
+                    $counts[$type] = file_exists($file)
+                        ? substr_count(file_get_contents($file), '<' . $tag . '>')
+                        : null;
                 }
-            } else {
-                $base = \app\modules\xml_generator\src\XmlFeed::getFeedsBasePath();
-                $file = $base . '/' . $type . '/' . $user->uuid . '/' . $type . '.xml';
-                $counts[$type] = file_exists($file)
-                    ? substr_count(file_get_contents($file), '<' . $tag . '>')
-                    : null;
+            }
+        } else {
+            foreach ($tagMap as $type => $tag) {
+                if ($storage) {
+                    $key = $type . '/' . $user->uuid . '/' . $type . '.xml';
+                    $counts[$type] = $storage->exists($key)
+                        ? substr_count($storage->get($key), '<' . $tag . '>')
+                        : null;
+                } else {
+                    $base = \app\modules\xml_generator\src\XmlFeed::getFeedsBasePath();
+                    $file = $base . '/' . $type . '/' . $user->uuid . '/' . $type . '.xml';
+                    $counts[$type] = file_exists($file)
+                        ? substr_count(file_get_contents($file), '<' . $tag . '>')
+                        : null;
+                }
             }
         }
 

@@ -3,6 +3,7 @@ namespace app\modules\xml_generator\controllers;
 
 use app\models\User;
 use app\modules\xml_generator\src\XmlFeed;
+use app\services\FeedStorageService;
 use yii\web\Controller;
 
 class ProductsController extends Controller
@@ -16,11 +17,19 @@ class ProductsController extends Controller
 
         if ($_user->shop_type=='shoper'){
             $integrator=\app\modules\shoper\models\Integrator::findOne(['shop_url'=>'https://'.$_user->username]);
-            if (is_file($integrator->getProductsFile())){
-                $products_file=file_get_contents($integrator->getProductsFile());
-                
+            if (FeedStorageService::isConfigured()) {
+                $storage = FeedStorageService::create();
+                $key = $integrator->getMinioProductsKey();
+                if (!$storage->exists($key)) {
+                    return 'Not ready yet';
+                }
                 header('Content-type: application/xml; charset=utf-8');
-                echo $products_file;
+                $storage->stream($key);
+                die;
+            }
+            if (is_file($integrator->getProductsFile())) {
+                header('Content-type: application/xml; charset=utf-8');
+                readfile($integrator->getProductsFile());
                 die;
             }
             return 'Not ready yet';
@@ -35,16 +44,12 @@ class ProductsController extends Controller
             return $e->getMessage();
         }
 
-        header('Content-type: application/xml; charset=utf-8');
-        // echo $products_file;
         $filename='products.xml';
         header('Content-type: application/xml; charset=utf-8');
-        // echo $products_file_path;
         header("Content-Length: ".filesize(trim($products_file_path)));
-                header("Content-Disposition: attachment; filename=\"$filename\"");
-                // Force the download           
-                header("Content-Transfer-Encoding: binary");            
-                @readfile($products_file_path);    
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        header("Content-Transfer-Encoding: binary");
+        @readfile($products_file_path);
         die;
     }
 }
