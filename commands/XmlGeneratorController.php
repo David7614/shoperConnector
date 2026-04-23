@@ -272,14 +272,9 @@ class XmlGeneratorController extends Controller
                 Integrator::shoperLog('1.6 Step: End', $queue->id);
                 Integrator::shoperLog('-- 1.7 Integration Result: OK', $queue->id);
                 return ExitCode::OK;
-            } catch (Exception $e) {
-                Integrator::shoperLog('-- 1.8 Integration Result: ERROR:', $queue->id);
-                Integrator::shoperLog(print_r($e->getCode(), true), $queue->id);
-                Integrator::shoperLog(print_r($e->getMessage(), true), $queue->id);
-                Integrator::shoperLog('-- 1.9 Integration Result: ERROR', $queue->id);
-                echo $e->getMessage();
+            } catch (\Throwable $e) {
+                $this->printThrowable($e);
 
-                // Prevention of queue blocking by http request failed error
                 if ($e->getMessage() == 'HTTP request failed') {
                     $queue->setShoperApiDelay();
                     $queue->setPendingStatus();
@@ -287,7 +282,6 @@ class XmlGeneratorController extends Controller
                 }
 
                 if ($e->getMessage() == 'Retries count exceeded') {
-                    // $queue->setShoperApiDelay('+5 min');
                     $queue->setPendingStatus();
                     return ExitCode::UNSPECIFIED_ERROR;
                 }
@@ -358,10 +352,8 @@ class XmlGeneratorController extends Controller
             $queue->setCountErrors(0);
 
             return ExitCode::OK;
-        } catch (Exception $e) {
-            echo "ERROR::".PHP_EOL;
-            echo $e->getMessage();
-            // $queue->setErrorStatus($e->getMessage());
+        } catch (\Throwable $e) {
+            $this->printThrowable($e);
 
             $queue->raiseCountErrors();
             if ($queue->getCountErrors()<30){
@@ -369,8 +361,22 @@ class XmlGeneratorController extends Controller
             }else{
                 $queue->setErrorStatus($e->getMessage());
             }
-            
+
             return ExitCode::UNSPECIFIED_ERROR;
+        }
+    }
+
+    private function printThrowable(\Throwable $e): void
+    {
+        echo PHP_EOL;
+        echo '=== ' . get_class($e) . ' ===' . PHP_EOL;
+        echo 'Message : ' . $e->getMessage() . PHP_EOL;
+        echo 'File    : ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+        echo 'Code    : ' . $e->getCode() . PHP_EOL;
+        echo 'Trace   :' . PHP_EOL . $e->getTraceAsString() . PHP_EOL;
+        if ($e->getPrevious()) {
+            echo '--- Caused by ---' . PHP_EOL;
+            $this->printThrowable($e->getPrevious());
         }
     }
 }
