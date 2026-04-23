@@ -28,6 +28,14 @@ use Yii;
  */
 class Product extends \yii\db\ActiveRecord
 {
+    public function init()
+    {
+        parent::init();
+        if ($this->PRICES === null) {
+            $this->PRICES = '-';
+        }
+    }
+
     /**
      * {@inheritdoc}
      */
