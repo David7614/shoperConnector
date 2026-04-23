@@ -53,7 +53,16 @@ class FeedStorageService
             ],
         ]);
 
-        return new self($s3, $bucket);
+        $instance = new self($s3, $bucket);
+        $instance->ensureBucket();
+        return $instance;
+    }
+
+    private function ensureBucket(): void
+    {
+        if (!$this->s3->doesBucketExist($this->bucket)) {
+            $this->s3->createBucket(['Bucket' => $this->bucket]);
+        }
     }
 
     public function exists(string $key): bool
