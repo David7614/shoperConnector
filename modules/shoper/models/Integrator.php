@@ -474,7 +474,7 @@ class Integrator extends ShoperShops{
 
         echo "[customer] get from api".PHP_EOL;
 
-        if ($queue->getCurrentUser()->_user->getIncrementalFeedFlag()) {
+        if ($queue->getCurrentUser()->getIncrementalFeedFlag()) {
             if ($queue->page == 0) {
                 Customers::deleteAll(['user_id' => $queue->getCurrentUser()->id]); // delete all obsolete entries
             }
@@ -833,7 +833,7 @@ class Integrator extends ShoperShops{
 
         Integrator::shoperLog('- 2.1.2 Step: Generate order', $queue->id);
 
-        if ($queue->getCurrentUser()->_user->getIncrementalFeedFlag()) {
+        if ($queue->getCurrentUser()->getIncrementalFeedFlag()) {
             if ($queue->page == 0) {
                 Orders::deleteAll(['user_id' => $queue->getCurrentUser()->id]); // delete all obsolete entries
             }
