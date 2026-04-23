@@ -608,7 +608,7 @@ class Integrator extends ShoperShops{
                 $Product->PRODUCT_LINE='brak';
                 $CategoryObj=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
                 if (!$CategoryObj){
-                    die ("no category imported yet");
+                    die ("[product] category missing ".$res->category_id." for shoper_shop ".$this->id);
                 }
                 $Product->CATEGORYTEXT=$CategoryObj->getFullPath($lang);
                 $Product->SHOW=$trans->active;
