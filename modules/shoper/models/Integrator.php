@@ -932,12 +932,12 @@ class Integrator extends ShoperShops{
             return false;
         }
 
-        $body = $storage->collectAndDeleteChunks($chunkBaseKey, $chunkIndex);
-        $storage->put(
-            $finalKey,
-            '<?xml version="1.0" encoding="UTF-8"?><PRODUCTS>' . $body . '</PRODUCTS>',
-            'application/xml'
-        );
+        $tmpFile = sys_get_temp_dir() . '/' . $this->shop . '-products-' . getmypid() . '.xml';
+        if (!$storage->collectChunksToFile($chunkBaseKey, $tmpFile, $chunkIndex, '<?xml version="1.0" encoding="UTF-8"?><PRODUCTS>', '</PRODUCTS>')) {
+            return false;
+        }
+        $storage->putFromFile($finalKey, $tmpFile, 'application/xml');
+        @unlink($tmpFile);
         return true;
     }
 
@@ -1067,8 +1067,12 @@ class Integrator extends ShoperShops{
             return false;
         }
 
-        $body = $storage->collectAndDeleteChunks($chunkBaseKey, $chunkIndex);
-        $storage->put($finalKey, '<?xml version="1.0" encoding="UTF-8"?><CUSTOMERS>' . $body . '</CUSTOMERS>', 'application/xml');
+        $tmpFile = sys_get_temp_dir() . '/' . $this->shop . '-customers-' . getmypid() . '.xml';
+        if (!$storage->collectChunksToFile($chunkBaseKey, $tmpFile, $chunkIndex, '<?xml version="1.0" encoding="UTF-8"?><CUSTOMERS>', '</CUSTOMERS>')) {
+            return false;
+        }
+        $storage->putFromFile($finalKey, $tmpFile, 'application/xml');
+        @unlink($tmpFile);
         return true;
     }
 
@@ -1339,8 +1343,12 @@ class Integrator extends ShoperShops{
             return false;
         }
 
-        $body = $storage->collectAndDeleteChunks($chunkBaseKey, $chunkIndex);
-        $storage->put($finalKey, '<?xml version="1.0" encoding="UTF-8"?><ORDERS>' . $body . '</ORDERS>', 'application/xml');
+        $tmpFile = sys_get_temp_dir() . '/' . $this->shop . '-orders-' . getmypid() . '.xml';
+        if (!$storage->collectChunksToFile($chunkBaseKey, $tmpFile, $chunkIndex, '<?xml version="1.0" encoding="UTF-8"?><ORDERS>', '</ORDERS>')) {
+            return false;
+        }
+        $storage->putFromFile($finalKey, $tmpFile, 'application/xml');
+        @unlink($tmpFile);
         return true;
     }
 

@@ -226,6 +226,51 @@ class FeedStorageService
         ]);
     }
 
+    public function putFromFile(string $key, string $filePath, string $contentType = 'application/octet-stream'): void
+    {
+        $this->s3->putObject([
+            'Bucket'      => $this->bucket,
+            'Key'         => $key,
+            'SourceFile'  => $filePath,
+            'ContentType' => $contentType,
+        ]);
+    }
+
+    public function collectChunksToFile(string $baseKey, string $destFile, int $expectedCount, string $prefix = '', string $suffix = ''): bool
+    {
+        $keys   = [];
+        $params = ['Bucket' => $this->bucket, 'Prefix' => $baseKey . '.chunk.'];
+        do {
+            $result = $this->s3->listObjectsV2($params);
+            foreach ($result['Contents'] ?? [] as $obj) {
+                $keys[] = $obj['Key'];
+            }
+            $params['ContinuationToken'] = $result['NextContinuationToken'] ?? null;
+        } while (!empty($result['IsTruncated']));
+        sort($keys);
+
+        if ($expectedCount > 0 && count($keys) !== $expectedCount) {
+            echo "WARNING: expected {$expectedCount} chunks, found " . count($keys) . PHP_EOL;
+            return false;
+        }
+
+        $fp = fopen($destFile, 'w');
+        if (!$fp) return false;
+
+        if ($prefix !== '') fwrite($fp, $prefix);
+        foreach ($keys as $key) {
+            $obj  = $this->s3->getObject(['Bucket' => $this->bucket, 'Key' => $key, '@http' => ['stream' => true]]);
+            $body = $obj['Body'];
+            while (!$body->eof()) {
+                fwrite($fp, $body->read(65536));
+            }
+            $this->s3->deleteObject(['Bucket' => $this->bucket, 'Key' => $key]);
+        }
+        if ($suffix !== '') fwrite($fp, $suffix);
+        fclose($fp);
+        return true;
+    }
+
     public function append(string $key, string $additionalContent): void
     {
         $existing = $this->exists($key) ? $this->get($key) : '';
