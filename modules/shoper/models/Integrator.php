@@ -574,6 +574,7 @@ class Integrator extends ShoperShops{
 
         echo "[product] fetching from API" . PHP_EOL;
         $response=$resource->get();
+        echo "[product] got ".count($response)." of ".$response->pages." from API" . PHP_EOL;
         if ($queue->max_page<$response->pages){
             $queue->max_page=$response->pages;
         }

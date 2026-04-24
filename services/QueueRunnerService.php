@@ -98,7 +98,6 @@ class QueueRunnerService
                 return ExitCode::OK;
             }
 
-            Integrator::shoperLog('1.4 Step: Generating', $queue->id);
             $timeStart      = microtime(true);
             $functionResult = $integrator->{'generate' . ucfirst($queue->integration_type)}($queue);
             $elapsed        = microtime(true) - $timeStart;
@@ -115,8 +114,6 @@ class QueueRunnerService
             );
 
             if ($functionResult && $queue->max_page <= $queue->page) {
-                Integrator::shoperLog('1.5 Step: Making XML', $queue->id);
-
                 if ($integrator->prepareFile($queue)) {
                     echo "set executed";
                     $queue->setExecutedStatus();
