@@ -675,7 +675,7 @@ class Integrator extends ShoperShops{
                 $Product->VARIANT     = serialize($variantArray);
                 $Product->STOCK       = $res->stock->stock;
                 $Product->response    = serialize($res);
-                $Product->params_hash = md5(serialize($res));
+                $Product->params_hash = $hash;
 
                 if (!$Product->save()){
                     print_r($Product->getErrors());
