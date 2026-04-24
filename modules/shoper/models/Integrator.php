@@ -574,7 +574,7 @@ class Integrator extends ShoperShops{
 
         echo "[product] fetching from API" . PHP_EOL;
         $response=$resource->get();
-        echo "[product] got ".count($response)." of ".$response->pages." from API" . PHP_EOL;
+        echo "[product] got ".$response->pages." from API" . PHP_EOL;
         if ($queue->max_page<$response->pages){
             $queue->max_page=$response->pages;
         }
@@ -599,6 +599,7 @@ class Integrator extends ShoperShops{
         $userUrl = $user->getUrl();
 
         foreach ($response as $res){
+            echo "[product] processing product " . $res->product_id . PHP_EOL;            
             foreach ($res->translations as $lang=>$trans){
                 $Product = Product::findOne(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang])
                     ?? new Product(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang]);
