@@ -952,7 +952,7 @@ class Integrator extends ShoperShops{
         $xml->startDocument('1.0', 'UTF-8');
         $xml->startElement('PRODUCTS');
 
-        foreach ($query->each(5000) as $product) {
+        foreach ($query->each(3000) as $product) {
             $this->writeProductXml($xml, $product);
         }
 
@@ -1026,77 +1026,115 @@ class Integrator extends ShoperShops{
         return false;
     }
 
-    public function prepareCustomersFile($queue){
-        $usedEmails=[];
-        $customers = new \SimpleXMLElement('<CUSTOMERS/>');
-        foreach (Customers::find()->where(['user_id' => $queue->getCurrentUser()->id])->all() as $customer) {
-            $usedEmails[]=$customer->email;
-            // var_dump($customer);
-            $item = $customers->addChild('CUSTOMER');
-            $item->addChild('CUSTOMER_ID', $customer->customer_id);
-            // echo htmlspecialchars($customer->email);
-            $item->addChild('EMAIL', htmlspecialchars($customer->email));
-            $item->addChild('REGISTRATION', $this->getCorrectSambaDate($customer->registration));
-            $item->addChild('FIRST_NAME', htmlspecialchars($customer->first_name));
-            $item->addChild('LAST_NAME', htmlspecialchars($customer->lastname));
-            $item->addChild('NEWSLETTER_FREQUENCY', $customer->newsletter_frequency);
-            if ($customer->zip_code){
-                $item->addChild('ZIP_CODE', $customer->zip_code);
-            } 
-            if ($customer->phone){
-                $number = str_replace(['+', '-'], '', filter_var($customer->phone, FILTER_SANITIZE_NUMBER_INT));
-                $number=preg_replace("/[^0-9]/", "", $number);
-                $item->addChild('PHONE', $number);
-            }
-            $item->addChild('SMS_FREQUENCY', $customer->sms_frequency);
-            $item->addChild('DATA_PERMISSION', $customer->data_permission);
-            $item->addChild('NLF_TIME', $this->getCorrectSambaDate($customer->nlf_time));
-
-
-            $paramsChild = $item->addChild('PARAMETERS');
-            $lastName = $paramsChild->addChild('PARAMETER');
-            $lastName->addChild('NAME', 'LAST_NAME');
-            $lastName->addChild('VALUE', htmlspecialchars($customer->lastname));
-
-            $firstName = $paramsChild->addChild('PARAMETER');
-            $firstName->addChild('NAME', 'FIRST_NAME');
-            $firstName->addChild('VALUE', htmlspecialchars($customer->first_name));
-
-            $tags=unserialize($customer->tags);
-            if ($tags){
-                foreach ($tags as $tag){
-                    $Tag=ShoperUserTag::findOne(['shoper_shops_id'=>$this->id, 'tag_id'=>$tag]);
-                    $paramChild = $paramsChild->addChild('PARAMETER');
-                    $paramChild->addChild('NAME', $Tag->name);
-                    $paramChild->addChild('VALUE', '1');
-                }
-            }
-
-        }
-/*
-        foreach (ShoperSubscribers::find()->where(['shoper_shops_id'=>$this->id, 'active' => 1])->all() as $subscriber) {
-            if (in_array($subscriber, $usedEmails)){
-                continue;
-            }
-            $item = $customers->addChild('CUSTOMER');
-            $item->addChild('CUSTOMER_ID', 'SUBSCRIBER'.$subscriber->subscriber_id);
-            $item->addChild('EMAIL', htmlspecialchars($subscriber->email));
-            $item->addChild('REGISTRATION', $this->getCorrectSambaDate($subscriber->dateadd));
-            $item->addChild('NEWSLETTER_FREQUENCY', 'every day');
-            $item->addChild('NLF_TIME', $this->getCorrectSambaDate($subscriber->dateadd));
-        }*/
-
+    public function prepareCustomersFile($queue): bool
+    {
+        $query   = Customers::find()->where(['user_id' => $queue->getCurrentUser()->id]);
         $storage = $this->getStorage();
         if ($storage) {
-            $storage->put($this->getMinioCustomersKey(), $customers->asXML(), 'application/xml');
-            return true;
+            return $this->prepareCustomersFileChunked($query, $storage);
         }
-        if (file_put_contents($this->getCustomersFile(), $customers->asXML())) {
-            return true;
+        return $this->prepareCustomersFileLocal($query);
+    }
+
+    private function prepareCustomersFileChunked($query, FeedStorageService $storage): bool
+    {
+        $batchSize    = 3000;
+        $finalKey     = $this->getMinioCustomersKey();
+        $chunkBaseKey = $finalKey . '.s' . $batchSize;
+        $storage->deleteChunks($chunkBaseKey);
+
+        $chunkIndex = 0;
+        foreach ($query->batch($batchSize) as $batch) {
+            $xml = new \XMLWriter();
+            $xml->openMemory();
+            foreach ($batch as $customer) {
+                $this->writeCustomerXml($xml, $customer);
+            }
+            $storage->putChunk($chunkBaseKey, $chunkIndex, $xml->outputMemory(true));
+            echo "[customer] chunk {$chunkIndex} saved (" . count($batch) . " customers)" . PHP_EOL;
+            $chunkIndex++;
         }
 
+        $missing = [];
+        for ($i = 0; $i < $chunkIndex; $i++) {
+            if (!$storage->chunkExists($chunkBaseKey, $i)) {
+                $missing[] = $i;
+            }
+        }
+        if ($missing) {
+            echo "[customer] ERROR: missing chunks: " . implode(', ', $missing) . PHP_EOL;
+            $storage->deleteChunks($chunkBaseKey);
+            return false;
+        }
 
-        return false;
+        $body = $storage->collectAndDeleteChunks($chunkBaseKey, $chunkIndex);
+        $storage->put($finalKey, '<?xml version="1.0" encoding="UTF-8"?><CUSTOMERS>' . $body . '</CUSTOMERS>', 'application/xml');
+        return true;
+    }
+
+    private function prepareCustomersFileLocal($query): bool
+    {
+        $tmpFile = sys_get_temp_dir() . '/' . $this->shop . '-customers-' . getmypid() . '.xml';
+        $xml = new \XMLWriter();
+        if (!$xml->openUri($tmpFile)) {
+            return false;
+        }
+        $xml->startDocument('1.0', 'UTF-8');
+        $xml->startElement('CUSTOMERS');
+        foreach ($query->each(3000) as $customer) {
+            $this->writeCustomerXml($xml, $customer);
+        }
+        $xml->endElement();
+        $xml->endDocument();
+        $xml->flush();
+        $dest = $this->getCustomersFile();
+        $ok   = rename($tmpFile, $dest);
+        if (!$ok) {
+            @unlink($tmpFile);
+        }
+        return $ok;
+    }
+
+    private function writeCustomerXml(\XMLWriter $xml, $customer): void
+    {
+        $xml->startElement('CUSTOMER');
+        $xml->writeElement('CUSTOMER_ID', $customer->customer_id);
+        $xml->writeElement('EMAIL', $customer->email);
+        $xml->writeElement('REGISTRATION', $this->getCorrectSambaDate($customer->registration));
+        $xml->writeElement('FIRST_NAME', $customer->first_name);
+        $xml->writeElement('LAST_NAME', $customer->lastname);
+        $xml->writeElement('NEWSLETTER_FREQUENCY', $customer->newsletter_frequency);
+        if ($customer->zip_code) {
+            $xml->writeElement('ZIP_CODE', $customer->zip_code);
+        }
+        if ($customer->phone) {
+            $xml->writeElement('PHONE', preg_replace('/[^0-9]/', '', $customer->phone));
+        }
+        $xml->writeElement('SMS_FREQUENCY', $customer->sms_frequency);
+        $xml->writeElement('DATA_PERMISSION', $customer->data_permission);
+        $xml->writeElement('NLF_TIME', $this->getCorrectSambaDate($customer->nlf_time));
+
+        $xml->startElement('PARAMETERS');
+        $xml->startElement('PARAMETER');
+        $xml->writeElement('NAME', 'LAST_NAME');
+        $xml->writeElement('VALUE', $customer->lastname);
+        $xml->endElement();
+        $xml->startElement('PARAMETER');
+        $xml->writeElement('NAME', 'FIRST_NAME');
+        $xml->writeElement('VALUE', $customer->first_name);
+        $xml->endElement();
+        $tags = unserialize($customer->tags);
+        if ($tags) {
+            foreach ($tags as $tag) {
+                $Tag = ShoperUserTag::findOne(['shoper_shops_id' => $this->id, 'tag_id' => $tag]);
+                $xml->startElement('PARAMETER');
+                $xml->writeElement('NAME', $Tag->name);
+                $xml->writeElement('VALUE', '1');
+                $xml->endElement();
+            }
+        }
+        $xml->endElement(); // PARAMETERS
+        $xml->endElement(); // CUSTOMER
     }
 
     private function createCustomerXml()
@@ -1260,45 +1298,99 @@ class Integrator extends ShoperShops{
         return false;
     }
 
-    public function prepareOrdersFile($queue){
-        $orders = new \SimpleXMLElement('<ORDERS/>');
-        foreach (Orders::find()->where(['user_id' => $queue->getCurrentUser()->id])->all() as $order) {
-            $ordChild = $orders->addChild('ORDER');
-            $ordChild->addChild('ORDER_ID', $order->order_id);
-            $ordChild->addChild('CUSTOMER_ID', $order->customer_id);
-            $ordChild->addChild('CREATED_ON', $this->getCorrectSambaDate($order->created_on));
-
-            if ($order->status == 'finished') {
-                $ordChild->addChild('FINISHED_ON', $this->getCorrectSambaDate($order->finished_on));
-            }
-
-            $ordChild->addChild('STATUS', $order->status);
-            $email=htmlentities(html_entity_decode($order->email, ENT_QUOTES, 'UTF-8'), ENT_QUOTES, 'UTF-8');
-            $ordChild->addChild('EMAIL', $email);
-            $phone=htmlentities(html_entity_decode($order->phone, ENT_QUOTES, 'UTF-8'), ENT_QUOTES, 'UTF-8');
-            $ordChild->addChild('PHONE', str_replace(' ', '', $phone));
-            $ordChild->addChild('ZIP_CODE', $order->zip_code);
-            $ordChild->addChild('COUNTRY_CODE', $order->country_code);
-
-            $ordItems = $ordChild->addChild('ITEMS');
-            foreach ($order->getPositions() as $product) {
-                $prodItem = $ordItems->addChild('ITEM');
-                $prodItem->addChild('PRODUCT_ID', $product['product_id']);
-                $prodItem->addChild('AMOUNT', $product['amount']);
-                $prodItem->addChild('PRICE', $product['price']);
-            }
-        }
+    public function prepareOrdersFile($queue): bool
+    {
+        $query   = Orders::find()->where(['user_id' => $queue->getCurrentUser()->id]);
         $storage = $this->getStorage();
         if ($storage) {
-            $storage->put($this->getMinioOrdersKey(), $orders->asXML(), 'application/xml');
-            return true;
+            return $this->prepareOrdersFileChunked($query, $storage);
         }
-        if (file_put_contents($this->getOrdersFile(), $orders->asXML())) {
-            return true;
+        return $this->prepareOrdersFileLocal($query);
+    }
+
+    private function prepareOrdersFileChunked($query, FeedStorageService $storage): bool
+    {
+        $batchSize    = 3000;
+        $finalKey     = $this->getMinioOrdersKey();
+        $chunkBaseKey = $finalKey . '.s' . $batchSize;
+        $storage->deleteChunks($chunkBaseKey);
+
+        $chunkIndex = 0;
+        foreach ($query->batch($batchSize) as $batch) {
+            $xml = new \XMLWriter();
+            $xml->openMemory();
+            foreach ($batch as $order) {
+                $this->writeOrderXml($xml, $order);
+            }
+            $storage->putChunk($chunkBaseKey, $chunkIndex, $xml->outputMemory(true));
+            echo "[order] chunk {$chunkIndex} saved (" . count($batch) . " orders)" . PHP_EOL;
+            $chunkIndex++;
         }
 
+        $missing = [];
+        for ($i = 0; $i < $chunkIndex; $i++) {
+            if (!$storage->chunkExists($chunkBaseKey, $i)) {
+                $missing[] = $i;
+            }
+        }
+        if ($missing) {
+            echo "[order] ERROR: missing chunks: " . implode(', ', $missing) . PHP_EOL;
+            $storage->deleteChunks($chunkBaseKey);
+            return false;
+        }
 
-        return false;
+        $body = $storage->collectAndDeleteChunks($chunkBaseKey, $chunkIndex);
+        $storage->put($finalKey, '<?xml version="1.0" encoding="UTF-8"?><ORDERS>' . $body . '</ORDERS>', 'application/xml');
+        return true;
+    }
+
+    private function prepareOrdersFileLocal($query): bool
+    {
+        $tmpFile = sys_get_temp_dir() . '/' . $this->shop . '-orders-' . getmypid() . '.xml';
+        $xml = new \XMLWriter();
+        if (!$xml->openUri($tmpFile)) {
+            return false;
+        }
+        $xml->startDocument('1.0', 'UTF-8');
+        $xml->startElement('ORDERS');
+        foreach ($query->each(3000) as $order) {
+            $this->writeOrderXml($xml, $order);
+        }
+        $xml->endElement();
+        $xml->endDocument();
+        $xml->flush();
+        $dest = $this->getOrdersFile();
+        $ok   = rename($tmpFile, $dest);
+        if (!$ok) {
+            @unlink($tmpFile);
+        }
+        return $ok;
+    }
+
+    private function writeOrderXml(\XMLWriter $xml, $order): void
+    {
+        $xml->startElement('ORDER');
+        $xml->writeElement('ORDER_ID', $order->order_id);
+        $xml->writeElement('CUSTOMER_ID', $order->customer_id);
+        $xml->writeElement('CREATED_ON', $this->getCorrectSambaDate($order->created_on));
+        if ($order->status == 'finished') {
+            $xml->writeElement('FINISHED_ON', $this->getCorrectSambaDate($order->finished_on));
+        }
+        $xml->writeElement('STATUS', $order->status);
+        $xml->writeElement('EMAIL', html_entity_decode($order->email, ENT_QUOTES, 'UTF-8'));
+        $xml->writeElement('PHONE', str_replace(' ', '', html_entity_decode($order->phone, ENT_QUOTES, 'UTF-8')));
+        $xml->writeElement('ZIP_CODE', $order->zip_code);
+        $xml->writeElement('COUNTRY_CODE', $order->country_code);
+        $xml->startElement('ITEMS');
+        foreach ($order->getPositions() as $product) {
+            $xml->startElement('ITEM');
+            $xml->writeElement('PRODUCT_ID', $product['product_id']);
+            $xml->writeElement('AMOUNT', $product['amount']);
+            $xml->writeElement('PRICE', $product['price']);
+            $xml->endElement();
+        }
+        $xml->endElement(); // ITEMS
+        $xml->endElement(); // ORDER
     }
 
     public function getCustomersFile(){
