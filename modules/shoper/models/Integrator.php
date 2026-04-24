@@ -902,7 +902,7 @@ class Integrator extends ShoperShops{
 
     private function prepareProductsFileChunked($query, FeedStorageService $storage): bool
     {
-        $batchSize    = 5000;
+        $batchSize    = 3000;
         $finalKey     = $this->getMinioProductsKey();
         $chunkBaseKey = $finalKey . '.s' . $batchSize;
 
