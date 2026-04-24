@@ -142,13 +142,18 @@ class Integrator extends ShoperShops{
     }
 
     public function generateAttributes($queue){
-        echo "[product] attributes start" . PHP_EOL;
+        
 
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['attributes'])){
             $parameters['attributes']=[];
             $parameters['attributes']['page']=0;
             $parameters['attributes']['max_page']=0;
+        }
+        if (isset($parameters['attributes']['done']) && $parameters['attributes']['done'] ==1){
+            echo "[product] attributes skip done" . PHP_EOL;
+            return true;
+
         }
         $app=$this->prepareConnection();
         $resource = new Attribute($app->getClient());
@@ -165,11 +170,11 @@ class Integrator extends ShoperShops{
         $response=$resource->get();
 
 
-
         if ($parameters['attributes']['max_page']<$response->pages){
             $parameters['attributes']['max_page']=$response->pages;
         }
         $parameters['attributes']['page']=$response->page;
+        echo "[product] attributes start ".$parameters['attributes']['page']." of ".$parameters['attributes']['max_page']. PHP_EOL;
 
         $queue->additionalParameters=$parameters;
         $queue->save();
@@ -196,6 +201,9 @@ class Integrator extends ShoperShops{
 
         if ($parameters['attributes']['max_page']<=$parameters['attributes']['page']){
             echo "[product] attributes done" . PHP_EOL;
+            $parameters['attributes']['done']=1;
+            $queue->additionalParameters=$parameters;
+            $queue->save();
             return true;
         }
         return false;
@@ -497,12 +505,16 @@ class Integrator extends ShoperShops{
     }
 
     public function generateProducers($queue){
-        echo "[product] producers start" . PHP_EOL;
         $parameters=$queue->additionalParameters;
         if (!isset($parameters['producers'])){
             $parameters['producers']=[];
             $parameters['producers']['page']=0;
             $parameters['producers']['max_page']=0;
+        }
+        if (isset($parameters['producers']['done']) && $parameters['producers']['done'] ==1){
+            echo "[product] producers skip done" . PHP_EOL;
+            return true;
+
         }
         // print_r($parameters);
         $app=$this->prepareConnection();
@@ -522,7 +534,8 @@ class Integrator extends ShoperShops{
             $parameters['producers']['max_page']=$response->pages;
         }
         $parameters['producers']['page']=$response->page;
-        // print_r($parameters);
+
+        echo "[product] producer start ".$parameters['attributes']['page']." of ".$parameters['attributes']['max_page']. PHP_EOL;
 
         $queue->additionalParameters=$parameters;
         $queue->save();
@@ -536,9 +549,13 @@ class Integrator extends ShoperShops{
                 print_r($ShoperProducer->getErrors());
             }
         }
+        print_r($parameters);
 
         if ($parameters['producers']['max_page']<=$parameters['producers']['page']){
             echo "[product] producers done" . PHP_EOL;
+            $parameters['producers']['done']=1;
+            $queue->additionalParameters=$parameters;
+            $queue->save();
             return true;
         }
         return false;
@@ -598,8 +615,11 @@ class Integrator extends ShoperShops{
 
         $userUrl = $user->getUrl();
 
+        $productsProcessed=0;
+
         foreach ($response as $res){
-            echo "[product] processing product " . $res->product_id . PHP_EOL;            
+            echo "[product] processing product " . $res->product_id . PHP_EOL;        
+
             foreach ($res->translations as $lang=>$trans){
                 $Product = Product::findOne(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang])
                     ?? new Product(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang]);
@@ -653,9 +673,14 @@ class Integrator extends ShoperShops{
 
                 if (!$Product->save()){
                     print_r($Product->getErrors());
+                }else{
+                    $productsProcessed++;
                 }
             }
         }
+
+        echo "[product] processed $productsProcessed products on page " . $queue->page . PHP_EOL;
+
 
         if ($queue->max_page <= $queue->page){
             IntegrationData::setData('LAST_PRODUCTS_DONE', date('Y-m-d'), $user->id);
