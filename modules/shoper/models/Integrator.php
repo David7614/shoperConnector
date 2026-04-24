@@ -624,6 +624,11 @@ class Integrator extends ShoperShops{
                 $Product = Product::findOne(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang])
                     ?? new Product(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang]);
 
+                $hash = md5(serialize($res));
+                if (!$Product->isNewRecord && $Product->params_hash === $hash) {
+                    continue;
+                }
+
                 $Product->from_api_page = $queue->page;
                 $Product->URL   = $trans->permalink;
                 $Product->TITLE = $trans->name;
