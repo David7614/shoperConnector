@@ -359,7 +359,7 @@ class Integrator extends ShoperShops{
         }
         $parameters['address']['page']=$response->page;
 
-        echo "[customer] address page " . $parameters['address']['page'] . " of " . $parameters['address']['max_page'] . PHP_EOL;
+        echo "[customer] address page " . $parameters['address']['page'] . " of " . $parameters['address']['max_page'] . ", pages in response ".$response->pages.PHP_EOL;
 
         $queue->additionalParameters=$parameters;
         $queue->save();
@@ -642,10 +642,11 @@ class Integrator extends ShoperShops{
 
                 $Product->PRODUCT_LINE = 'brak';
 
-                if (!isset($categoryMap[$res->category_id])) {
-                    die("[product] category missing " . $res->category_id . " for shoper_shop " . $this->id);
+                if (isset($categoryMap[$res->category_id])) {
+                    $Product->CATEGORYTEXT = $categoryMap[$res->category_id]->getFullPath($lang);
+                }else{
+                    $Product->CATEGORYTEXT = 'brak';
                 }
-                $Product->CATEGORYTEXT = $categoryMap[$res->category_id]->getFullPath($lang);
                 $Product->SHOW = $trans->active;
 
                 $parametersArray = [];
