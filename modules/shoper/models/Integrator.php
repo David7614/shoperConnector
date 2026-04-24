@@ -889,53 +889,120 @@ class Integrator extends ShoperShops{
         return $queue->page >= $queue->max_page;
     }
 
-    public function prepareProductsFile($queue){
-
-        $products = new \SimpleXMLElement('<PRODUCTS/>');
-        foreach (Product::find()->where(['user_id' => $queue->getCurrentUser()->id])->all() as $product) {
-            $prodChild = $products->addChild('PRODUCT');
-            $prodChild->addChild('SHOW', $product->SHOW?'TRUE':'FALSE');
-            $prodChild->addChild('PRODUCT_ID', $product->PRODUCT_ID);
-            $prodChild->addChild('URL', $product->URL);
-            $prodChild->addChild('TITLE', htmlspecialchars($product->TITLE));
-            // var_dump($product->PRICE);
-            $prodChild->addChild('PRICE', str_replace(',','.',$product->PRICE));
-            $prodChild->addChild('BRAND', htmlspecialchars($product->BRAND));
-            $prodChild->addChild('DESCRIPTION', htmlspecialchars($product->DESCRIPTION));
-            $prodChild->addChild('PRICE_BEFORE_DISCOUNT', $product->PRICE_BEFORE_DISCOUNT);
-            $prodChild->addChild('PRICE_BUY', str_replace(',','.',$product->PRICE_BUY));
-            $prodChild->addChild('IMAGE', $product->IMAGE);
-            $prodChild->addChild('PRODUCT_LINE', htmlspecialchars($product->PRODUCT_LINE));
-            $prodChild->addChild('CATEGORYTEXT', htmlspecialchars($product->CATEGORYTEXT));
-
-            $parameters=$prodChild->addChild('PARAMETERS');
-            foreach (unserialize($product->PARAMETERS) as $param){
-                $parameter=$parameters->addChild('PARAMETER');
-                $parameter->addChild('NAME', $param['NAME']);
-                $parameter->addChild('VALUE', htmlspecialchars($param['VALUE']));
-            }
-            // var_dump(unserialize($product->VARIANT));
-            // die ("!!");
-            foreach (unserialize($product->VARIANT) as $variant){
-                $productVariant=$prodChild->addChild('VARIANT');
-                foreach ($variant as $k=>$v){
-                    $productVariant->addChild($k, $v);
-                }
-            }
-            $prodChild->addChild('STOCK', $product->STOCK);
-        }
-        // print_r($products->asXML());
+    public function prepareProductsFile($queue): bool
+    {
+        $query   = Product::find()->where(['user_id' => $queue->getCurrentUser()->id]);
         $storage = $this->getStorage();
+
         if ($storage) {
-            $storage->put($this->getMinioProductsKey(), $products->asXML(), 'application/xml');
-            return true;
+            return $this->prepareProductsFileChunked($query, $storage);
         }
-        if (file_put_contents($this->getProductsFile(), $products->asXML())) {
-            return true;
+        return $this->prepareProductsFileLocal($query);
+    }
+
+    private function prepareProductsFileChunked($query, FeedStorageService $storage): bool
+    {
+        $batchSize    = 5000;
+        $finalKey     = $this->getMinioProductsKey();
+        $chunkBaseKey = $finalKey . '.s' . $batchSize;
+
+        $storage->deleteChunks($chunkBaseKey);
+
+        $chunkIndex = 0;
+        foreach ($query->batch($batchSize) as $batch) {
+            $xml = new \XMLWriter();
+            $xml->openMemory();
+            foreach ($batch as $product) {
+                $this->writeProductXml($xml, $product);
+            }
+            $storage->putChunk($chunkBaseKey, $chunkIndex, $xml->outputMemory(true));
+            echo "[product] chunk {$chunkIndex} saved (" . count($batch) . " products)" . PHP_EOL;
+            $chunkIndex++;
         }
 
+        $missing = [];
+        for ($i = 0; $i < $chunkIndex; $i++) {
+            if (!$storage->chunkExists($chunkBaseKey, $i)) {
+                $missing[] = $i;
+            }
+        }
+        if ($missing) {
+            echo "[product] ERROR: missing chunks: " . implode(', ', $missing) . PHP_EOL;
+            $storage->deleteChunks($chunkBaseKey);
+            return false;
+        }
 
-        return false;
+        $body = $storage->collectAndDeleteChunks($chunkBaseKey, $chunkIndex);
+        $storage->put(
+            $finalKey,
+            '<?xml version="1.0" encoding="UTF-8"?><PRODUCTS>' . $body . '</PRODUCTS>',
+            'application/xml'
+        );
+        return true;
+    }
+
+    private function prepareProductsFileLocal($query): bool
+    {
+        $tmpFile = sys_get_temp_dir() . '/' . $this->shop . '-products-' . getmypid() . '.xml';
+
+        $xml = new \XMLWriter();
+        if (!$xml->openUri($tmpFile)) {
+            return false;
+        }
+        $xml->startDocument('1.0', 'UTF-8');
+        $xml->startElement('PRODUCTS');
+
+        foreach ($query->each(5000) as $product) {
+            $this->writeProductXml($xml, $product);
+        }
+
+        $xml->endElement();
+        $xml->endDocument();
+        $xml->flush();
+
+        $dest = $this->getProductsFile();
+        $ok   = rename($tmpFile, $dest);
+        if (!$ok) {
+            @unlink($tmpFile);
+        }
+        return $ok;
+    }
+
+    private function writeProductXml(\XMLWriter $xml, $product): void
+    {
+        $xml->startElement('PRODUCT');
+        $xml->writeElement('SHOW', $product->SHOW ? 'TRUE' : 'FALSE');
+        $xml->writeElement('PRODUCT_ID', $product->PRODUCT_ID);
+        $xml->writeElement('URL', $product->URL);
+        $xml->writeElement('TITLE', $product->TITLE);
+        $xml->writeElement('PRICE', str_replace(',', '.', $product->PRICE));
+        $xml->writeElement('BRAND', $product->BRAND);
+        $xml->writeElement('DESCRIPTION', $product->DESCRIPTION);
+        $xml->writeElement('PRICE_BEFORE_DISCOUNT', $product->PRICE_BEFORE_DISCOUNT);
+        $xml->writeElement('PRICE_BUY', str_replace(',', '.', $product->PRICE_BUY));
+        $xml->writeElement('IMAGE', $product->IMAGE);
+        $xml->writeElement('PRODUCT_LINE', $product->PRODUCT_LINE);
+        $xml->writeElement('CATEGORYTEXT', $product->CATEGORYTEXT);
+
+        $xml->startElement('PARAMETERS');
+        foreach (unserialize($product->PARAMETERS) as $param) {
+            $xml->startElement('PARAMETER');
+            $xml->writeElement('NAME', $param['NAME']);
+            $xml->writeElement('VALUE', $param['VALUE']);
+            $xml->endElement();
+        }
+        $xml->endElement(); // PARAMETERS
+
+        foreach (unserialize($product->VARIANT) as $variant) {
+            $xml->startElement('VARIANT');
+            foreach ($variant as $k => $v) {
+                $xml->writeElement($k, $v);
+            }
+            $xml->endElement(); // VARIANT
+        }
+
+        $xml->writeElement('STOCK', $product->STOCK);
+        $xml->endElement(); // PRODUCT
     }
     public function prepareCategoriesFile($queue){
         echo "[category] building XML file" . PHP_EOL;
