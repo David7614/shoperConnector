@@ -87,7 +87,6 @@ class App
      */
     public function installHandler($arguments)
     {
-        echo "install";
         try {
             $tr = Yii::$app->db->beginTransaction();
 
@@ -113,7 +112,6 @@ class App
                 $c->setAuthCode($arguments['auth_code']);
                 $tokens = $c->authenticate();
             } catch (ClientException $ex) {
-                echo "CE";
                 throw new \Exception('Client error', 0, $ex);
             }
 
@@ -141,8 +139,7 @@ class App
             }
             throw new \Exception('Database error', 0, $ex);
         } catch (\Exception $ex) {
-            echo "Exception2";
-            print_r($ex->getMessage());
+            Yii::error('Install handler: ' . $ex->getMessage(), 'shoper');
             if ($tr->inTransaction()) {
                 $tr->rollBack();
             }
