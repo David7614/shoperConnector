@@ -38,8 +38,7 @@ class DefaultController extends ShoperController
      * @return string
      */
     public function actionTest(){
-        chdir(__DIR__);
-        $config = require '../library/Config.php';
+        $config = require __DIR__ . '/../library/Config.php';
         // die ("!!");
         $app = new App($config);
         $app->bootstrap();
@@ -188,8 +187,7 @@ class DefaultController extends ShoperController
         Yii::debug('DATA');
         Yii::debug(json_encode($_POST));
 
-        chdir(__DIR__);
-        $config = require '../library/Config.php';
+        $config = require __DIR__ . '/../library/Config.php';
         if (isset($_GET['test'])){
             // echo "<pre>";
             // var_dump($config);
