@@ -64,6 +64,14 @@ $config = [
                 ],
                 [
                     'class' => 'yii\log\FileTarget',
+                    'logFile' => 'php://stderr',
+                    'levels' => ['error', 'warning', 'info'],
+                    'logVars' => [],
+                    'enableRotation' => false,
+                    'prefix' => function() { return ''; },
+                ],
+                [
+                    'class' => 'yii\log\FileTarget',
                     'levels' => ['info', 'trace', 'error', 'warning'],
                     'categories' => ['shoper'],
                     'logVars' => [],

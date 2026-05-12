@@ -193,9 +193,13 @@ class DefaultController extends ShoperController
             // var_dump($config);
             // die ("TEST");
         }
-        $billingSystem = new \app\modules\shoper\library\BillingSystem\App($_POST['shop_url'], $config);
-        $billingSystem->dispatch();
-        echo "!";
-        die ("!!!");
+        try {
+            $billingSystem = new \app\modules\shoper\library\BillingSystem\App($_POST['shop_url'], $config);
+            $billingSystem->dispatch();
+        } catch (\Exception $e) {
+            Yii::error('Billing error [' . get_class($e) . ']: ' . $e->getMessage() . ' | POST: ' . json_encode($_POST), 'shoper');
+            throw $e;
+        }
+        die('OK');
     }
 }
