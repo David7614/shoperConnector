@@ -12,6 +12,7 @@ use app\models\IntegrationData;
 // use yii\filters\VerbFilter;
 
 class ShoperController extends Controller{
+	public $layout = '@app/modules/shoper/views/layouts/main';
 	protected $referer;
 	protected $user;
 	const SHOP_TYPE='shoper';
