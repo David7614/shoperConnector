@@ -55,7 +55,7 @@ AppAsset::register($this);
                             app.adjustIframeSize();
                         });
                     }, function (errmsg, app) {
-                        alert(errmsg);
+                        console.error('ShopApp init error:', errmsg);
                     });
                 }, true);
 
