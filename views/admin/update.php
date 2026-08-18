@@ -106,13 +106,6 @@
                         </div>
 
                         <div class="form-group">
-                            <?= Html::label('Subskrybenci newslettera w feedzie', 'subscribers_feed_enable') ?>
-                            <?= Html::dropDownList('subscribers_feed_enable', $user->config->get('subscribers_feed_enable'),
-                                ['0'=>'Nie wysyłaj subskrybentów', '1'=>'Wysyłaj subskrybentów']
-                            , ['class' => 'form-control', 'id' => 'subscribers_feed_enable']); ?>
-                        </div>
-
-                        <div class="form-group">
                             <?php echo Html::submitButton('Zapisz', ['class' => 'btn btn-primary']) ?>
                         </div>
                         <?php echo Html::endForm() ?>

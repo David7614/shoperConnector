@@ -144,9 +144,6 @@ class AdminController extends Controller
             $product_feed_disable = Yii::$app->request->post('product_feed_disable');
             var_dump($user->getConfig()->set('product_feed_disable', $product_feed_disable));
 
-            $subscribers_feed_enable = Yii::$app->request->post('subscribers_feed_enable');
-            var_dump($user->getConfig()->set('subscribers_feed_enable', $subscribers_feed_enable));
-
             $export_type = Yii::$app->request->post('export_type');
             if ((int)$user->getConfig()->get('export_type') != $export_type) {
                 if ($export_type == 0) {
@@ -639,6 +636,10 @@ class AdminController extends Controller
                         $checkResults[] = ['label' => $label, 'path' => $ep['path'], 'ok' => $res !== false];
                     }
                 }
+            } elseif ($action === 'feed') {
+                $user->getConfig()->set('subscribers_feed_enable', (int) Yii::$app->request->post('subscribers_feed_enable'));
+
+                return $this->redirect(['admin/update', 'id' => $id]);
             } else {
                 $active   = (int) Yii::$app->request->post('active', $user->active);
                 $shopType = Yii::$app->request->post('shop_type', $user->shop_type);

@@ -73,6 +73,25 @@ use yii\helpers\Url;
         </div>
     </div>
 
+    <!-- Feed klientow -->
+    <div class="panel panel-default">
+        <div class="panel-heading">Feed klientów</div>
+        <div class="panel-body">
+            <?= Html::beginForm(['admin/update', 'id' => $user->id], 'post') ?>
+            <?= Html::hiddenInput('_action', 'feed') ?>
+            <div class="form-group">
+                <?= Html::label('Subskrybenci newslettera w feedzie', 'subscribers_feed_enable') ?>
+                <?= Html::dropDownList('subscribers_feed_enable', (int) $user->config->get('subscribers_feed_enable'),
+                    [0 => 'Nie wysyłaj subskrybentów', 1 => 'Wysyłaj subskrybentów'],
+                    ['class' => 'form-control', 'id' => 'subscribers_feed_enable']
+                ) ?>
+                <p class="help-block">Adresy z zakładki „Subskrybenci” w Shoperze, które nie mają konta klienta, trafiają do feedu jako popup-&lt;email&gt;.</p>
+            </div>
+            <?= Html::submitButton('Zapisz', ['class' => 'btn btn-primary']) ?>
+            <?= Html::endForm() ?>
+        </div>
+    </div>
+
     <!-- Klucz API -->
     <div class="panel panel-default">
         <div class="panel-heading">Klucz API (idosell v3)</div>
