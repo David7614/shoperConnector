@@ -1,6 +1,5 @@
 <?php
     use kartik\date\DatePicker;
-    use yii\helpers\ArrayHelper;
     use \yii\helpers\Html;
     use app\models\IntegrationData;
 ?>
@@ -26,50 +25,6 @@
                         <div class="form-group">
                             <?php echo Html::label('Trackpoint', 'trackpoint') ?>
 <?php echo Html::textInput('trackpoint', $user->config->get('trackpoint'), ['class' => 'form-control', 'id' => 'trackpoint']) ?>
-                        </div>
-                        <!-- <div class="form-group">
-                            <?php echo Html::label('Smartpoint included', 'smartpoint_true') ?>
-<?php echo Html::radio('smartpoint', $user->config->get('smartpoint') ? true : false, ['class' => 'form-control', 'id' => 'smartpoint_true', 'value' => 1]) ?>
-                        </div>
-                        <div class="form-group">
-                            <?php echo Html::label('Smartpoint from GTM', 'smartpoint_false') ?>
-<?php echo Html::radio('smartpoint', $user->config->get('smartpoint') ? false : true, ['class' => 'form-control', 'id' => 'smartpoint_false', 'value' => 0]) ?>
-                        </div> -->
-                        <div class="form-group">
-                            <?php echo Html::label('Język exportowany (experymentalna)', 'selected_language') ?>
-<?php echo Html::dropDownList('selected_language', $user->config->get('selected_language'), ArrayHelper::map($languages, 'lang_id', 'lang_name'), ['class' => 'form-control', 'id' => 'selected_language']); ?>
-                        </div>
-                        <div class="form-group">
-                            <?php echo Html::label('Agreguj grupy produktowe jako warianty', 'aggregate_groups_as_variants') ?>
-<?php echo Html::dropDownList('aggregate_groups_as_variants', $user->config->get('aggregate_groups_as_variants'),
-        ['0' => 'Nie', '1' => 'Tak']
-    , ['class' => 'form-control', 'id' => 'aggregate_groups_as_variants']); ?>
-                        </div>
-                        <div class="form-group">
-                            <?php echo Html::label('Wszystkie dane będą pobierane ze sklepu:') ?>
-<?php echo Html::dropDownList('customer_set_shop_id',
-	$user->config->get('customer_set_shop_id'), 
-	ArrayHelper::map($shops, 'shop_id', 'shop_name') + ['0' => 'Nie wybrano (wszystkie)'], ['class' => 'form-control', 'id' => 'customer_set_shop_id']); ?>
-                        </div>
-
-                        <div class="form-group">
-                            <?php echo Html::label('Pobieraj stany', 'get_quantity_from') ?>
-<?php echo Html::dropDownList('get_quantity_from', $user->config->get('get_quantity_from'),
-        ['0' => 'Domyślnie', '1' => 'Z oferty dyspozycyjnej (productSizesDispositions)']
-    , ['class' => 'form-control', 'id' => 'aggregate_groups_as_variants']); ?>
-                        </div>
-                        <div class="form-group">
-                            <?php echo Html::label('Używaj menu kategorii', 'get_menu_from') ?>
-                            <?php echo Html::dropDownList('get_menu_from', $user->config->get('get_menu_from'),
-                                [
-                                    '0' => 'Standardowe kategorie idosell',
-                                    '1' => 'Węzeł menu 1 (z reguły domyślny)',
-                                    '2' => 'Węzeł menu 2',
-                                    '3' => 'Węzeł menu 3',
-                                    '4' => 'Węzeł menu 4',
-                                    '5' => 'Węzeł menu 5'
-                                ]
-                                , ['class' => 'form-control', 'id' => 'aggregate_groups_as_variants']); ?>
                         </div>
                         <div class="form-group">
                             <?php echo Html::label('Generuj dane klientów i zamówień od', 'orders_date_from') ?>
@@ -197,18 +152,6 @@
                         <?php echo Html::beginForm(\yii\helpers\Url::toRoute(['admin/save-product-feed', 'id' => $user->id]), 'post') ?>
 
                         <table class="table">
-                            <?php
-                                $stockIdsArray = $user->config->getStockIdsArray();
-                                // var_dump($stockIdsArray);
-                            ?>
-<?php if ($stocks) {?>
-<?php foreach ($stocks as $stock) {?>
-                                    <tr>
-                                        <td style="width:34px;"><?php echo Html::checkbox('Settings[stock_ids_array][]', in_array($stock['stock_id'], $stockIdsArray), ['class' => 'form-control', 'id' => 'stock_ids', 'value' => $stock['stock_id']]); ?></td>
-                                        <td><?php echo Html::label("Pobieraj stany z: " . $stock['stock_name'], 'stock_ids'); ?></td>
-                                    </tr>
-                                <?php }?>
-<?php }?>
                             <tr>
                                 <td><?php echo Html::checkbox('Settings[product_image]', $user->config->get('product_image'), ['class' => 'form-control', 'id' => 'product_image']); ?></td>
                                 <td><?php echo Html::label("Zdjęcie", 'product_image'); ?></td>
@@ -361,15 +304,6 @@
                             <tr>
                                 <td><?php echo Html::checkbox('Settings[customer_tags]', $user->config->get('customer_tags'), ['class' => 'form-control', 'id' => 'customer_tags']); ?></td>
                                 <td><?php echo Html::label("Tagi klienta", 'customer_tags'); ?></td>
-                            </tr>
-
-                            <tr>
-                                <td></td>
-                                <td><h3>Zgody marketingowe pobierane ze sklepu:</h3></td>
-                            </tr>
-                            <tr>
-                                <td></td>
-                                <td><?php echo Html::dropDownList('Settings[customer_default_approvals_shop_id]', $user->config->get('customer_default_approvals_shop_id') ? $user->config->get('customer_default_approvals_shop_id') : 1, ArrayHelper::map($shops, 'shop_id', 'shop_name'), ['class' => 'form-control', 'id' => 'customer_default_approvals_shop_id']); ?></td>
                             </tr>
 
                         </table>

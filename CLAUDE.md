@@ -78,6 +78,16 @@ php vendor/bin/codecept run functional
 - Integration state per user tracked via `user` and `accesstokens` tables
 
 ### Deployment
+- **Production: https://shoper.sambaai.pl** - Heroku app `shoperconnector` (EU), MySQL + MinIO on Stackhero
 - Docker: `docker-compose.yml` (PHP 7.4 + Apache)
 - Vagrant: `Vagrantfile` (Ubuntu 18.04)
 - Cron schedule: countries daily, queue prep nightly, integrations every 10 min
+
+### Feed URLs
+Feeds are served by `modules/xml_generator/controllers/*Controller.php`. `urlManager.rules` is empty, so only the default Yii routing works:
+
+```
+https://shoper.sambaai.pl/xml_generator/customers/generate?uuid=<user.uuid>
+```
+
+Same pattern for `products`, `orders`, `categories`. Note: `User::getCustomersUrl()` returns a pretty `/xml/<uuid>/customers.xml` form that has no matching route. The controller returns the plain text `Not ready yet` when the file is not in storage yet.

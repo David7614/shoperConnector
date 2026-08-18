@@ -105,41 +105,23 @@ class AdminController extends Controller
     public function actionDashboard($id)
     {
         $user = User::findOne($id);
-        if (! $user->apiEnabled()) {
-            return $this->redirect(Url::toRoute(['/admin/set-api-key'] + Yii::$app->request->get()));
-        }
-        $client = new ApiClient($user->username, $user->getApiKey());
-        $res    = $client->sendRequest('/api/admin/v3/system/config');
-
-        if (! $res) {
-            return $this->redirect(Url::toRoute(['/admin/set-api-key'] + Yii::$app->request->get()));
+        if (! $user) {
+            throw new \yii\web\NotFoundHttpException('Nie znaleziono użytkownika.');
         }
 
         if (Yii::$app->request->isPost) {
-            $oldTrackpoint=$user->getConfig()->get('trackpoint');
-            $trackpoint = Yii::$app->request->post('trackpoint');
-            if ($oldTrackpoint != $trackpoint)
-            {
-                $user->saveTrackpoint($trackpoint);
+            $oldTrackpoint = $user->getConfig()->get('trackpoint');
+            $trackpoint    = Yii::$app->request->post('trackpoint');
+            if ($oldTrackpoint != $trackpoint) {
+                $user->getConfig()->set('trackpoint', $trackpoint);
+                $integrator = \app\modules\shoper\models\Integrator::findOne(['shop_url' => 'https://' . $user->username]);
+                if ($integrator) {
+                    $integrator->setMetafield('trackpoint', $trackpoint, \DreamCommerce\ShopAppstoreLib\Resource\Metafield::TYPE_STRING);
+                }
             }
-
-            $smartpoint = Yii::$app->request->post('smartpoint');
-            var_dump($user->getConfig()->set('smartpoint', $smartpoint));
-
-            $selected_language = Yii::$app->request->post('selected_language');
-            var_dump($user->getConfig()->set('selected_language', $selected_language));
-
-            $aggregate_groups_as_variants = Yii::$app->request->post('aggregate_groups_as_variants');
-            var_dump($user->getConfig()->set('aggregate_groups_as_variants', $aggregate_groups_as_variants));
 
             $orders_date_from = Yii::$app->request->post('orders_date_from');
             $user->getConfig()->setOrdersDateFrom($orders_date_from);
-
-            $get_quantity_from = Yii::$app->request->post('get_quantity_from');
-            var_dump($user->getConfig()->set('get_quantity_from', $get_quantity_from));
-
-            $get_menu_from = Yii::$app->request->post('get_menu_from');
-            var_dump($user->getConfig()->set('get_menu_from', $get_menu_from));
 
             $product_feed_disable = Yii::$app->request->post('product_feed_disable');
             var_dump($user->getConfig()->set('product_feed_disable', $product_feed_disable));
@@ -167,13 +149,6 @@ class AdminController extends Controller
             }
 
             Yii::$app->session->addFlash('success', 'Ustawienia główne zapisane');
-
-            $customerShopId = Yii::$app->request->post('customer_set_shop_id');
-
-            $user->setCustomerShoipId($customerShopId);
-
-            $settingsService = new SettingsService();
-            $settingsService->saveShopUrl($customerShopId, $user, $res['shops']);
 
             return $this->redirect(Url::toRoute(['admin/dashboard', 'id' => $user->id]));
         }
@@ -256,16 +231,13 @@ class AdminController extends Controller
         }
 
         $urls               = [];
-        $urls['products']   = Url::home(true) . 'xml/' . $user->uuid . '/products.xml';
-        $urls['customers']  = Url::home(true) . 'xml/' . $user->uuid . '/customers.xml';
-        $urls['orders']     = Url::home(true) . 'xml/' . $user->uuid . '/orders.xml';
-        $urls['categories'] = Url::home(true) . 'xml/' . $user->uuid . '/categories.xml';
+        $urls['products']   = Url::to(['/xml_generator/products/generate',   'uuid' => $user->uuid], true);
+        $urls['customers']  = Url::to(['/xml_generator/customers/generate',  'uuid' => $user->uuid], true);
+        $urls['orders']     = Url::to(['/xml_generator/orders/generate',     'uuid' => $user->uuid], true);
+        $urls['categories'] = Url::to(['/xml_generator/categories/generate', 'uuid' => $user->uuid], true);
 
         return $this->render('update', [
             'user'      => $user,
-            'languages' => $res['languages'],
-            'shops'     => $res['shops'],
-            'stocks'    => $res['stocks'],
             'urls'      => $urls,
             'filesInfo' => $filesInfo,
         ]);
@@ -888,10 +860,6 @@ class AdminController extends Controller
     {
         $user = User::findOne($id);
 
-        if (!$user->apiEnabled()) {
-            return $this->redirect(Url::toRoute(['/admin/set-api-key'] + Yii::$app->request->get()));
-        }
-
         if (Yii::$app->request->isPost) {
             $settingsService = new SettingsService();
             $settingsService->saveProductFeed($user);
@@ -904,10 +872,6 @@ class AdminController extends Controller
     {
         $user = User::findOne($id);
 
-        if (!$user->apiEnabled()) {
-            return $this->redirect(Url::toRoute(['/admin/set-api-key'] + Yii::$app->request->get()));
-        }
-
         if (Yii::$app->request->isPost) {
             $settingsService = new SettingsService();
             $settingsService->saveCustomerFeed($user);
@@ -919,10 +883,6 @@ class AdminController extends Controller
     public function actionSaveOrderFeed($id)
     {
         $user = User::findOne($id);
-
-        if (!$user->apiEnabled()) {
-            return $this->redirect(Url::toRoute(['/admin/set-api-key'] + Yii::$app->request->get()));
-        }
 
         if (Yii::$app->request->isPost) {
             $settingsService = new SettingsService();

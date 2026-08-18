@@ -177,17 +177,6 @@ class SettingsService
             }
         }
 
-        $shopId = $user->getCustomerShopId();
-
-        if (!$shopId) {
-            $marketingShopId = $settings_post['customer_default_approvals_shop_id'] ?? null;
-
-            if ($marketingShopId) {
-                $shopsData = $this->fetchShopsData($user);
-                $user->setCustomerShopUrl($this->getShopMarketingUrl($shopsData, $user, $marketingShopId));
-            }
-        }
-
         return [$ok, $errors];
     }
 

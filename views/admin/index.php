@@ -60,9 +60,13 @@ $allUrl    = Url::current(['active' => 'all']);
                 'attribute' => 'username',
                 'label'     => 'Domena',
                 'value'     => function ($model) {
-                    return $model->fronturl
-                        ? Html::a(Html::encode($model->username), 'http://' . $model->username, ['target' => '_blank', 'style' => 'color:inherit'])
-                        : Html::encode($model->username);
+                    $out = Html::a(Html::encode($model->username), 'https://' . $model->username, ['target' => '_blank', 'style' => 'color:inherit']);
+                    if ($model->fronturl) {
+                        $out .= ' <span style="color:#888; font-size:12px;">('
+                            . Html::a(Html::encode($model->fronturl), 'https://' . $model->fronturl, ['target' => '_blank', 'style' => 'color:inherit'])
+                            . ')</span>';
+                    }
+                    return $out;
                 },
                 'format' => 'raw',
             ],
