@@ -1179,14 +1179,26 @@ class Integrator extends ShoperShops{
         $chunkIndex = $integrationDataCurrentPage;
         $page_size = self::XML_PAGE_SIZE;
 
-        $customers_query = Customers::find()->where(['user_id' => $queue->getCurrentUser()->id]);
-        $subscribers_query = ShoperSubscribers::find()->where(['shoper_shops_id'=>$this->id, 'active' => 1]);
+        $user = $queue->getCurrentUser();
+        $subscribersEnabled = $user->config->get('subscribers_feed_enable') == 1;
+
+        $customers_query = Customers::find()->where(['user_id' => $user->id])->orderBy('id');
+
+        $customerEmails = Customers::find()->select('email')
+            ->where(['user_id' => $user->id])
+            ->andWhere(['not', ['email' => null]]);
+        $subscribers_query = ShoperSubscribers::find()
+            ->where(['shoper_shops_id'=>$this->id, 'active' => 1])
+            ->andWhere(['not in', 'email', $customerEmails])
+            ->orderBy('id');
 
         $page = $integrationDataCurrentPage;
         $customerPages=ceil($customers_query->count() / $page_size);
         if( $integrationDataMaxPage == 0 ) {
             $pages = $customerPages;
-            $pages += ceil($subscribers_query->count() / $page_size);
+            if ($subscribersEnabled) {
+                $pages += ceil($subscribers_query->count() / $page_size);
+            }
             // $pages+=1; // to fit everything else
             $queue->max_page=$pages;
             $integrationDataMaxPage=$pages;
@@ -1196,15 +1208,13 @@ class Integrator extends ShoperShops{
 
         echo "[customer] page " . $page . " of " . $integrationDataMaxPage . PHP_EOL;
 
-        $usedEmails=[];
         $customers = new \SimpleXMLElement('<CUSTOMERS/>');
-        if ($page<=$customerPages){
+        if (!$subscribersEnabled || $page<$customerPages){
             $customers_db = $customers_query->limit($page_size)->offset(($page) * $page_size)->all();
             foreach ($customers_db as $customer) {
                 if (Queue::isDisallowedEmail($customer->email)) { // ommit allegro etc
                     continue;
                 }
-                $usedEmails[]=$customer->email;
                 // var_dump($customer);
                 $item = $customers->addChild('CUSTOMER');
                 $item->addChild('CUSTOMER_ID', $customer->customer_id);
@@ -1259,9 +1269,6 @@ class Integrator extends ShoperShops{
             $subscribers_db = $subscribers_query->limit($page_size)->offset(($page-$customerPages) * $page_size)->all();
 
             foreach ($subscribers_db as $subscriber) {
-                if (in_array($subscriber, $usedEmails)){
-                    continue;
-                }
                 $item = $customers->addChild('CUSTOMER');
                 $item->addChild('CUSTOMER_ID', 'popup-'.htmlspecialchars($subscriber->email));
                 $item->addChild('EMAIL', htmlspecialchars($subscriber->email));

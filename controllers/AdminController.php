@@ -144,6 +144,9 @@ class AdminController extends Controller
             $product_feed_disable = Yii::$app->request->post('product_feed_disable');
             var_dump($user->getConfig()->set('product_feed_disable', $product_feed_disable));
 
+            $subscribers_feed_enable = Yii::$app->request->post('subscribers_feed_enable');
+            var_dump($user->getConfig()->set('subscribers_feed_enable', $subscribers_feed_enable));
+
             $export_type = Yii::$app->request->post('export_type');
             if ((int)$user->getConfig()->get('export_type') != $export_type) {
                 if ($export_type == 0) {
