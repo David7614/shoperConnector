@@ -1151,6 +1151,13 @@ class Integrator extends ShoperShops{
         $storage = $this->getStorage();
         if ($storage) {
             $combined = $storage->collectAndDeleteChunks($this->getMinioCustomersTempKey());
+            if (trim($combined) === '') {
+                // brak chunkow - zwykle skutek ponownego uruchomienia zakonczonego joba,
+                // ktory zebral i skasowal je przy poprzednim przebiegu. Nadpisanie feedu
+                // pustym XML-em zabiloby dzialajacy plik, wiec zostawiamy poprzedni.
+                echo "[customer] no chunks collected - keeping previous feed file" . PHP_EOL;
+                return 10;
+            }
             $customer = new \SimpleXMLElement('<CUSTOMERS/>');
             $customer->addChild('CUSTOMER');
             $xml = str_replace('<CUSTOMER/>', $combined, $customer->asXML());
@@ -1161,9 +1168,15 @@ class Integrator extends ShoperShops{
         $file=$this->getCustomersFile();
         $temp=$this->getCustomersTempFile();
 
+        $combined = is_file($temp) ? file_get_contents($temp) : '';
+        if (trim($combined) === '') {
+            echo "[customer] temp file empty - keeping previous feed file" . PHP_EOL;
+            return 10;
+        }
+
         $customer = new \SimpleXMLElement('<CUSTOMERS/>');
         $customer->addChild('CUSTOMER');
-        file_put_contents($file, str_replace('<CUSTOMER/>', file_get_contents($temp), $customer->asXML()));
+        file_put_contents($file, str_replace('<CUSTOMER/>', $combined, $customer->asXML()));
         file_put_contents($temp, '');
         return is_file($file)?10:0;
     }
@@ -1180,7 +1193,6 @@ class Integrator extends ShoperShops{
         $page_size = self::XML_PAGE_SIZE;
 
         $user = $queue->getCurrentUser();
-        $subscribersEnabled = $user->config->get('subscribers_feed_enable') == 1;
 
         $customers_query = Customers::find()->where(['user_id' => $user->id])->orderBy('id');
 
@@ -1196,9 +1208,7 @@ class Integrator extends ShoperShops{
         $customerPages=ceil($customers_query->count() / $page_size);
         if( $integrationDataMaxPage == 0 ) {
             $pages = $customerPages;
-            if ($subscribersEnabled) {
-                $pages += ceil($subscribers_query->count() / $page_size);
-            }
+            $pages += ceil($subscribers_query->count() / $page_size);
             // $pages+=1; // to fit everything else
             $queue->max_page=$pages;
             $integrationDataMaxPage=$pages;
@@ -1209,7 +1219,7 @@ class Integrator extends ShoperShops{
         echo "[customer] page " . $page . " of " . $integrationDataMaxPage . PHP_EOL;
 
         $customers = new \SimpleXMLElement('<CUSTOMERS/>');
-        if (!$subscribersEnabled || $page<$customerPages){
+        if ($page<$customerPages){
             $customers_db = $customers_query->limit($page_size)->offset(($page) * $page_size)->all();
             foreach ($customers_db as $customer) {
                 if (Queue::isDisallowedEmail($customer->email)) { // ommit allegro etc

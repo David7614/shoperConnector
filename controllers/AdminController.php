@@ -608,10 +608,6 @@ class AdminController extends Controller
                         $checkResults[] = ['label' => $label, 'path' => $ep['path'], 'ok' => $res !== false];
                     }
                 }
-            } elseif ($action === 'feed') {
-                $user->getConfig()->set('subscribers_feed_enable', (int) Yii::$app->request->post('subscribers_feed_enable'));
-
-                return $this->redirect(['admin/update', 'id' => $id]);
             } else {
                 $active   = (int) Yii::$app->request->post('active', $user->active);
                 $shopType = Yii::$app->request->post('shop_type', $user->shop_type);
@@ -642,6 +638,14 @@ class AdminController extends Controller
         $queue = Queue::findOne((int)$queueId);
 
         if ($queue) {
+            // bez wyzerowania stron ponowny przebieg trafia od razu w skladanie pliku
+            // (page >= max_page), zbiera zero chunkow i psuje gotowy feed
+            $params = $queue->getAdditionalParameters();
+            $queue->page     = 0;
+            $queue->max_page = 0;
+            $queue->setAdditionalParameters(
+                isset($params['objects_done']) ? ['objects_done' => $params['objects_done']] : []
+            );
             $queue->setPendingStatus();
         }
 
