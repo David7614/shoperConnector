@@ -32,6 +32,16 @@
                             <?= Html::radio('smartpoint', $user->config->get('smartpoint')?false:true, ['class' => 'form-control', 'id' => 'smartpoint_false', 'value'=>0]) ?>
                         </div>
                         <div class="form-group">
+                            <?= Html::label('Język feedów', 'shoper_feed_language') ?>
+                            <?= Html::dropDownList('shoper_feed_language',
+                                $user->config->get(\app\modules\shoper\models\Integrator::FEED_LANGUAGE_CONFIG_KEY),
+                                ['' => 'Wszystkie języki'] + $feedLanguages
+                            , ['class' => 'form-control', 'id' => 'shoper_feed_language']) ?>
+                            <small class="form-text text-muted">
+                                Ogranicza produkty i kategorie w feedach do jednego języka sklepu.
+                            </small>
+                        </div>
+                        <div class="form-group">
                             <?= Html::submitButton('Zapisz', ['class' => 'btn btn-primary']) ?>
                         </div>
                         <?php  \yii\bootstrap\ActiveForm::end(); ?>

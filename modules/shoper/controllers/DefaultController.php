@@ -127,6 +127,11 @@ class DefaultController extends ShoperController
                     Yii::$app->session->addFlash('success', 'Udało się zapisać ' . Yii::$app->request->post('smartpoint'));
                 }
             }
+            $feedLanguage = Yii::$app->request->post('shoper_feed_language');
+            if ($feedLanguage !== null && $user->getConfig()->get(Integrator::FEED_LANGUAGE_CONFIG_KEY) != $feedLanguage){
+                $user->getConfig()->set(Integrator::FEED_LANGUAGE_CONFIG_KEY, $feedLanguage);
+                Yii::$app->session->addFlash('success', 'Zapisano język feedów');
+            }
             if (Yii::$app->request->post('Settings')){                
                 
                 list($ok, $errors) = $this->user->saveSettings(Yii::$app->request->post('Settings'));
@@ -144,7 +149,8 @@ class DefaultController extends ShoperController
 
 
         return $this->render('index', [
-            'user' => $user]);
+            'user' => $user,
+            'feedLanguages' => Integrator::getFeedLanguageOptions($user)]);
     }
 
     

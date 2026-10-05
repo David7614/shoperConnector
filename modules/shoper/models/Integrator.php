@@ -16,6 +16,7 @@ use DreamCommerce\ShopAppstoreLib\Resource\UserTag;
 use DreamCommerce\ShopAppstoreLib\Resource\Order;
 use DreamCommerce\ShopAppstoreLib\Resource\OrderProduct;
 use DreamCommerce\ShopAppstoreLib\Resource\Status;
+use DreamCommerce\ShopAppstoreLib\Resource\Language;
 use DreamCommerce\ShopAppstoreLib\Resource\Metafield;
 use DreamCommerce\ShopAppstoreLib\Resource\MetafieldValue;
 use \app\models\Product;
@@ -30,10 +31,97 @@ class Integrator extends ShoperShops{
 
     const XML_PAGE_SIZE=10000; // 50000
 
+    const FEED_LANGUAGE_CONFIG_KEY = 'shoper_feed_language';
+
     public static function shoperLog ($message, $queueId = 0) {
         if ($queueId == '31976') {
             Yii::info($message, 'shoper');
         }
+    }
+
+    /**
+     * Locale feedow wybrane dla usera (np. 'pl_PL') albo null = wszystkie jezyki.
+     *
+     * @param \app\models\User|null $user
+     */
+    public static function getFeedLanguage($user): ?string
+    {
+        if (!$user) {
+            return null;
+        }
+        $language = $user->getConfig()->get(self::FEED_LANGUAGE_CONFIG_KEY);
+
+        return $language ? $language : null;
+    }
+
+    /**
+     * Lista locale do wyboru w panelu - z shoper_languages_list (API Shopera),
+     * uzupelniona o to, co faktycznie siedzi juz w tabeli product.
+     *
+     * @param \app\models\User|null $user
+     * @return array locale => locale
+     */
+    public static function getFeedLanguageOptions($user): array
+    {
+        $locales = [];
+
+        if ($user) {
+            $integrator = self::findOne(['shop_url' => 'https://' . $user->username]);
+            if ($integrator) {
+                $locales = ShoperLanguagesList::find()
+                    ->select('locale')
+                    ->where(['shoper_shops_id' => $integrator->id])
+                    ->orderBy(['order' => SORT_ASC])
+                    ->column();
+            }
+
+            $locales = array_merge($locales, Product::find()
+                ->select('translation')
+                ->distinct()
+                ->where(['user_id' => $user->id])
+                ->column());
+        }
+
+        if ($selected = self::getFeedLanguage($user)) {
+            $locales[] = $selected;
+        }
+
+        $locales = array_values(array_unique(array_filter($locales)));
+        sort($locales);
+
+        return $locales ? array_combine($locales, $locales) : [];
+    }
+
+    /**
+     * Pobiera z API Shopera liste jezykow sklepu do shoper_languages_list.
+     */
+    public function syncLanguages(): bool
+    {
+        try {
+            $app = $this->prepareConnection();
+            $response = (new Language($app->getClient()))->get();
+        } catch (\Throwable $e) {
+            echo "[language] sync failed: " . $e->getMessage() . PHP_EOL;
+            return false;
+        }
+
+        foreach ($response as $res) {
+            $locale = isset($res->locale) ? $res->locale : null;
+            if (!$locale) {
+                continue;
+            }
+            $language = ShoperLanguagesList::findOne(['shoper_shops_id' => $this->id, 'locale' => $locale])
+                ?? new ShoperLanguagesList(['shoper_shops_id' => $this->id, 'locale' => $locale]);
+            $language->currency_id = isset($res->currency_id) ? (int) $res->currency_id : 0;
+            $language->active      = isset($res->active) ? (int) $res->active : 1;
+            $language->order       = isset($res->order) ? (int) $res->order : 0;
+            if (!$language->save()) {
+                print_r($language->getErrors());
+            }
+        }
+        echo "[language] synced" . PHP_EOL;
+
+        return true;
     }
 
     public function prepareConnection(){
@@ -95,7 +183,7 @@ class Integrator extends ShoperShops{
         $queue->page=$categoriesResponse->page;
         $queue->save();
 
-
+        $feedLanguage = self::getFeedLanguage($queue->getCurrentUser());
 
         foreach ($categoriesResponse as $res){
             $category=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
@@ -109,9 +197,12 @@ class Integrator extends ShoperShops{
                 print_r($category->getErrors());
             }
             foreach ($res->translations as $lang=>$trans){
-                $langCat=ShoperCategoriesLanguage::findOne(['shoper_categories_id'=>$category->id]);
+                if ($feedLanguage && $lang !== $feedLanguage){
+                    continue;
+                }
+                $langCat=ShoperCategoriesLanguage::findOne(['shoper_categories_id'=>$category->id, 'translation'=>$lang]);
                 if (!$langCat){
-                    $langCat=new ShoperCategoriesLanguage(['shoper_categories_id'=>$category->id]);
+                    $langCat=new ShoperCategoriesLanguage(['shoper_categories_id'=>$category->id, 'translation'=>$lang]);
                 }
                 $langCat->translation=$lang;
                 $langCat->name=$trans->name;
@@ -565,6 +656,7 @@ class Integrator extends ShoperShops{
     public function generateProduct($queue){
 
         if ($queue->page==0){
+            $this->syncLanguages();
             if (!$this->generateAttributes($queue)){
                 return false;
             }
@@ -574,6 +666,7 @@ class Integrator extends ShoperShops{
         }
 
         $user = $queue->getCurrentUser();
+        $feedLanguage = self::getFeedLanguage($user);
         $app  = $this->prepareConnection();
 
         $client = $app->getClient();
@@ -622,6 +715,9 @@ class Integrator extends ShoperShops{
             echo "[product] processing product " . $res->product_id . PHP_EOL;        
 
             foreach ($res->translations as $lang=>$trans){
+                if ($feedLanguage && $lang !== $feedLanguage){
+                    continue;
+                }
                 $Product = Product::findOne(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang])
                     ?? new Product(['user_id' => $user->id, 'PRODUCT_ID' => $res->product_id, 'translation' => $lang]);
 
@@ -972,7 +1068,8 @@ class Integrator extends ShoperShops{
                 'PRICE_BEFORE_DISCOUNT', 'PRICE_BUY', 'IMAGE', 'PRODUCT_LINE',
                 'CATEGORYTEXT', 'SHOW', 'PARAMETERS', 'VARIANT', 'STOCK',
             ])
-            ->where(['user_id' => $queue->getCurrentUser()->id]);
+            ->where(['user_id' => $queue->getCurrentUser()->id])
+            ->andFilterWhere(['translation' => self::getFeedLanguage($queue->getCurrentUser())]);
         $storage = $this->getStorage();
 
         if ($storage) {
@@ -1090,12 +1187,17 @@ class Integrator extends ShoperShops{
     }
     public function prepareCategoriesFile($queue){
         echo "[category] building XML file" . PHP_EOL;
+        $lang = self::getFeedLanguage($queue->getCurrentUser()) ?: 'pl_PL';
         $categories = new \SimpleXMLElement('<CATEGORY/>');
         foreach (ShoperCategories::find()->where(['shoper_shops_id' => $this->id, 'parent_id'=>0])->all() as $category) {
+            $translated = $category->getTranslated($lang);
+            if (!$translated) {
+                continue;
+            }
             $item = $categories->addChild('ITEM');
-            $item->addChild('TITLE', htmlspecialchars($category->getTranslated()->name));
-            $item->addChild('URL', $category->getTranslated()->permalink);
-            $category->getChildren($item);
+            $item->addChild('TITLE', htmlspecialchars($translated->name));
+            $item->addChild('URL', $translated->permalink);
+            $category->getChildren($item, $lang);
         }
         $storage = $this->getStorage();
         if ($storage) {

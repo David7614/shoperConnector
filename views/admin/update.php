@@ -60,6 +60,20 @@
                             , ['class' => 'form-control', 'id' => 'product_feed_disable']); ?>
                         </div>
 
+                        <?php if ($user->shop_type === 'shoper'): ?>
+                        <div class="form-group">
+                            <?= Html::label('Język feedów', 'shoper_feed_language') ?>
+                            <?= Html::dropDownList('shoper_feed_language',
+                                $user->config->get(\app\modules\shoper\models\Integrator::FEED_LANGUAGE_CONFIG_KEY),
+                                ['' => 'Wszystkie języki'] + $feedLanguages
+                            , ['class' => 'form-control', 'id' => 'shoper_feed_language']); ?>
+                            <small class="form-text text-muted">
+                                Ogranicza produkty i kategorie w feedach do jednego języka sklepu.
+                                Po zmianie na nowy język trzeba przepuścić pełny import, żeby pobrać brakujące tłumaczenia.
+                            </small>
+                        </div>
+                        <?php endif; ?>
+
                         <div class="form-group">
                             <?php echo Html::submitButton('Zapisz', ['class' => 'btn btn-primary']) ?>
                         </div>

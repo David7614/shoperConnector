@@ -127,6 +127,11 @@ class AdminController extends Controller
             $product_feed_disable = Yii::$app->request->post('product_feed_disable');
             var_dump($user->getConfig()->set('product_feed_disable', $product_feed_disable));
 
+            $shoper_feed_language = Yii::$app->request->post('shoper_feed_language');
+            if ($shoper_feed_language !== null) {
+                $user->getConfig()->set(\app\modules\shoper\models\Integrator::FEED_LANGUAGE_CONFIG_KEY, $shoper_feed_language);
+            }
+
             $export_type = Yii::$app->request->post('export_type');
             if ((int)$user->getConfig()->get('export_type') != $export_type) {
                 if ($export_type == 0) {
@@ -238,9 +243,10 @@ class AdminController extends Controller
         $urls['categories'] = Url::to(['/xml_generator/categories/generate', 'uuid' => $user->uuid], true);
 
         return $this->render('update', [
-            'user'      => $user,
-            'urls'      => $urls,
-            'filesInfo' => $filesInfo,
+            'user'          => $user,
+            'urls'          => $urls,
+            'filesInfo'     => $filesInfo,
+            'feedLanguages' => \app\modules\shoper\models\Integrator::getFeedLanguageOptions($user),
         ]);
     }
 

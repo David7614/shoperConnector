@@ -77,7 +77,16 @@ class ShoperCategories extends \yii\db\ActiveRecord
     }
 
     public function getTranslated($lang='pl_PL'){
-        return ShoperCategoriesLanguage::findOne(['shoper_categories_id' => $this->id, 'translation'=>$lang]);
+        $translated = ShoperCategoriesLanguage::findOne(['shoper_categories_id' => $this->id, 'translation'=>$lang]);
+        if ($translated){
+            return $translated;
+        }
+
+        // brak tlumaczenia w zadanym jezyku - bierzemy domyslne/jakiekolwiek, zeby nie gubic galezi drzewa
+        return ShoperCategoriesLanguage::find()
+            ->where(['shoper_categories_id' => $this->id])
+            ->orderBy(['isdefault' => SORT_DESC, 'id' => SORT_ASC])
+            ->one();
     }
 
     public function getParent(){
@@ -111,7 +120,7 @@ class ShoperCategories extends \yii\db\ActiveRecord
         return implode('|',$langPath);
     }
 
-    public function getChildren(&$items){
+    public function getChildren(&$items, $lang='pl_PL'){
         echo "get Children ".PHP_EOL;
         // echo $this->shoper_shops_id.PHP_EOL;
         // echo $this->id.PHP_EOL;
@@ -119,11 +128,15 @@ class ShoperCategories extends \yii\db\ActiveRecord
         // print_r($list);
         if ($list){
             foreach ($list as $l){
-                echo $l->getTranslated()->name."!!!".PHP_EOL;
+                $translated = $l->getTranslated($lang);
+                if (!$translated){
+                    continue;
+                }
+                echo $translated->name."!!!".PHP_EOL;
                 $item = $items->addChild('ITEM');
-                $item->addChild('TITLE', htmlspecialchars($l->getTranslated()->name));
-                $item->addChild('URL', $l->getTranslated()->permalink);
-                $l->getChildren($item);
+                $item->addChild('TITLE', htmlspecialchars($translated->name));
+                $item->addChild('URL', $translated->permalink);
+                $l->getChildren($item, $lang);
             }
         }
     }
