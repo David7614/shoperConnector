@@ -24,6 +24,7 @@ use \app\models\Orders;
 use \app\models\Queue;
 use app\models\IntegrationData;
 use app\services\FeedStorageService;
+use yii\db\IntegrityException;
 
 class Integrator extends ShoperShops{
 
@@ -677,7 +678,7 @@ class Integrator extends ShoperShops{
                 $Product->response    = serialize($res);
                 $Product->params_hash = $hash;
 
-                if (!$Product->save()){
+                if (!$this->saveProductSafely($Product)){
                     print_r($Product->getErrors());
                 }else{
                     $productsProcessed++;
@@ -694,6 +695,38 @@ class Integrator extends ShoperShops{
         }
 
         return true;
+    }
+
+    /**
+     * Zapis odporny na wyscig z rownoleglym workerem. Jesli pomiedzy SELECT-em
+     * a INSERT-em ten sam klucz (user_id, PRODUCT_ID, translation) wstawil inny
+     * proces, przelaczamy sie na update istniejacego wiersza zamiast przerywac
+     * cala strone kolejki bledem 1062.
+     */
+    private function saveProductSafely(Product $product): bool
+    {
+        try {
+            return $product->save();
+        } catch (IntegrityException $e) {
+            if (!$product->isNewRecord) {
+                throw $e;
+            }
+
+            $existing = Product::findOne([
+                'user_id'     => $product->user_id,
+                'PRODUCT_ID'  => $product->PRODUCT_ID,
+                'translation' => $product->translation,
+            ]);
+
+            if (!$existing) {
+                throw $e;
+            }
+
+            echo "[product] duplicate key for {$product->PRODUCT_ID}/{$product->translation} - updating existing row" . PHP_EOL;
+            $existing->setAttributes($product->getAttributes(null, ['ID', 'created']), false);
+
+            return $existing->save();
+        }
     }
 
     public function generateStatuses($queue){
@@ -887,6 +920,43 @@ class Integrator extends ShoperShops{
         return false;
     }
 
+    /**
+     * Iteracja po wynikach paczkami, z paginacja po kluczu glownym.
+     * W odroznieniu od Query::batch() nie wciaga calego wyniku do pamieci
+     * (PDO MySQL buforuje cale zapytanie po stronie klienta), wiec zuzycie
+     * pamieci jest stale niezaleznie od rozmiaru tabeli.
+     *
+     * @param \yii\db\ActiveQuery $query
+     * @return \Generator<int, array>
+     */
+    private function batchByPrimaryKey($query, int $batchSize = 3000): \Generator
+    {
+        $modelClass = $query->modelClass;
+        $pk         = $modelClass::primaryKey()[0];
+        $table      = $modelClass::tableName();
+        $lastId     = 0;
+
+        while (true) {
+            $rows = (clone $query)
+                ->andWhere(['>', "$table.$pk", $lastId])
+                ->orderBy(["$table.$pk" => SORT_ASC])
+                ->limit($batchSize)
+                ->all();
+
+            if (!$rows) {
+                return;
+            }
+
+            yield $rows;
+
+            $lastId = end($rows)->$pk;
+
+            if (count($rows) < $batchSize) {
+                return;
+            }
+        }
+    }
+
     public function isFinished($queue)
     {
         if($queue->max_page == 0 && $queue->page == 0) return false;
@@ -896,7 +966,13 @@ class Integrator extends ShoperShops{
 
     public function prepareProductsFile($queue): bool
     {
-        $query   = Product::find()->where(['user_id' => $queue->getCurrentUser()->id]);
+        $query   = Product::find()
+            ->select([
+                'ID', 'PRODUCT_ID', 'URL', 'TITLE', 'PRICE', 'BRAND', 'DESCRIPTION',
+                'PRICE_BEFORE_DISCOUNT', 'PRICE_BUY', 'IMAGE', 'PRODUCT_LINE',
+                'CATEGORYTEXT', 'SHOW', 'PARAMETERS', 'VARIANT', 'STOCK',
+            ])
+            ->where(['user_id' => $queue->getCurrentUser()->id]);
         $storage = $this->getStorage();
 
         if ($storage) {
@@ -914,7 +990,7 @@ class Integrator extends ShoperShops{
         $storage->deleteChunks($chunkBaseKey);
 
         $chunkIndex = 0;
-        foreach ($query->batch($batchSize) as $batch) {
+        foreach ($this->batchByPrimaryKey($query, $batchSize) as $batch) {
             $xml = new \XMLWriter();
             $xml->openMemory();
             foreach ($batch as $product) {
@@ -957,8 +1033,11 @@ class Integrator extends ShoperShops{
         $xml->startDocument('1.0', 'UTF-8');
         $xml->startElement('PRODUCTS');
 
-        foreach ($query->each(3000) as $product) {
-            $this->writeProductXml($xml, $product);
+        foreach ($this->batchByPrimaryKey($query, 3000) as $batch) {
+            foreach ($batch as $product) {
+                $this->writeProductXml($xml, $product);
+            }
+            $xml->flush();
         }
 
         $xml->endElement();
@@ -1049,7 +1128,7 @@ class Integrator extends ShoperShops{
         $storage->deleteChunks($chunkBaseKey);
 
         $chunkIndex = 0;
-        foreach ($query->batch($batchSize) as $batch) {
+        foreach ($this->batchByPrimaryKey($query, $batchSize) as $batch) {
             $xml = new \XMLWriter();
             $xml->openMemory();
             foreach ($batch as $customer) {
@@ -1090,8 +1169,11 @@ class Integrator extends ShoperShops{
         }
         $xml->startDocument('1.0', 'UTF-8');
         $xml->startElement('CUSTOMERS');
-        foreach ($query->each(3000) as $customer) {
-            $this->writeCustomerXml($xml, $customer);
+        foreach ($this->batchByPrimaryKey($query, 3000) as $batch) {
+            foreach ($batch as $customer) {
+                $this->writeCustomerXml($xml, $customer);
+            }
+            $xml->flush();
         }
         $xml->endElement();
         $xml->endDocument();
@@ -1342,7 +1424,7 @@ class Integrator extends ShoperShops{
         $storage->deleteChunks($chunkBaseKey);
 
         $chunkIndex = 0;
-        foreach ($query->batch($batchSize) as $batch) {
+        foreach ($this->batchByPrimaryKey($query, $batchSize) as $batch) {
             $xml = new \XMLWriter();
             $xml->openMemory();
             foreach ($batch as $order) {
@@ -1383,8 +1465,11 @@ class Integrator extends ShoperShops{
         }
         $xml->startDocument('1.0', 'UTF-8');
         $xml->startElement('ORDERS');
-        foreach ($query->each(3000) as $order) {
-            $this->writeOrderXml($xml, $order);
+        foreach ($this->batchByPrimaryKey($query, 3000) as $batch) {
+            foreach ($batch as $order) {
+                $this->writeOrderXml($xml, $order);
+            }
+            $xml->flush();
         }
         $xml->endElement();
         $xml->endDocument();
