@@ -59,6 +59,69 @@ class XmlGeneratorController extends Controller
         return (new QueueRunnerService())->run(XmlFeed::PRODUCT, ['forceId'=>$forceId, 'forcePage'=>$forcePage]);
     }
 
+    /**
+     * Diagnostyka filtra incremental: sprawdza, ktore pole daty realnie zaweza
+     * wynik zasobu w API Shopera. Jesli liczba stron jest taka sama jak bez
+     * filtra, to znaczy ze Shoper dane pole ignoruje.
+     *
+     * php yii xml-generator/test-api-filter <userId> [resource] [date]
+     *
+     * resource: product (domyslnie) | user | order
+     */
+    public function actionTestApiFilter($userId, $resource = 'product', $date = null)
+    {
+        $date = $date ?: date('Y-m-d', strtotime('-7 days'));
+
+        $user = User::findOne((int)$userId);
+        if (!$user) {
+            echo "Nie ma uzytkownika #$userId" . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);
+        if (!$integrator) {
+            echo "Nie ma integratora dla " . $user->username . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $resourceClasses = [
+            'product' => \DreamCommerce\ShopAppstoreLib\Resource\Product::class,
+            'user'    => \DreamCommerce\ShopAppstoreLib\Resource\User::class,
+            'order'   => \DreamCommerce\ShopAppstoreLib\Resource\Order::class,
+        ];
+
+        if (!isset($resourceClasses[$resource])) {
+            echo "Nieznany zasob '$resource'. Dostepne: " . implode(', ', array_keys($resourceClasses)) . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $resourceClass = $resourceClasses[$resource];
+        $client        = $integrator->prepareConnection()->getClient();
+
+        echo "sklep:  " . $user->username . PHP_EOL;
+        echo "zasob:  " . $resource . PHP_EOL;
+        echo "data:   >= " . $date . PHP_EOL . PHP_EOL;
+
+        foreach ([null, 'updated_at', 'edit_date', 'add_date', 'date'] as $field) {
+            $label = str_pad($field ?: '(bez filtra)', 14);
+
+            try {
+                $api = new $resourceClass($client);
+                if ($field !== null) {
+                    $api->filters([$field => ['>=' => $date]]);
+                }
+                $response = $api->get();
+                echo $label . ' -> stron: ' . $response->pages . ', rekordow: ' . $response->count . PHP_EOL;
+            } catch (\Throwable $e) {
+                echo $label . ' -> BLAD: ' . $e->getMessage() . PHP_EOL;
+            }
+        }
+
+        echo PHP_EOL . "Pole dziala, jesli zwraca wyraznie mniej stron niz '(bez filtra)'." . PHP_EOL;
+
+        return ExitCode::OK;
+    }
+
     public function actionGenerateCategories($forceId=0)
     {
         return (new QueueRunnerService())->run(XmlFeed::CATEGORY, ['forceId'=>$forceId]);
