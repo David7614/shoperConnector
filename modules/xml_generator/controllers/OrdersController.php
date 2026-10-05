@@ -24,11 +24,15 @@ class OrdersController extends Controller
                     return 'Not ready yet';
                 }
                 header('Content-type: application/xml; charset=utf-8');
+                header('Content-Length: ' . $storage->stat($key)['size']);
+                header('Content-Disposition: attachment; filename="orders.xml"');
                 $storage->stream($key);
                 die;
             }
             if (is_file($integrator->getOrdersFile())) {
                 header('Content-type: application/xml; charset=utf-8');
+                header('Content-Length: ' . filesize($integrator->getOrdersFile()));
+                header('Content-Disposition: attachment; filename="orders.xml"');
                 readfile($integrator->getOrdersFile());
                 die;
             }

@@ -24,11 +24,15 @@ class CategoriesController extends Controller
                     return 'Not ready yet';
                 }
                 header('Content-type: application/xml; charset=utf-8');
+                header('Content-Length: ' . $storage->stat($key)['size']);
+                header('Content-Disposition: attachment; filename="categories.xml"');
                 $storage->stream($key);
                 die;
             }
             if (is_file($integrator->getCategoriesFile())) {
                 header('Content-type: application/xml; charset=utf-8');
+                header('Content-Length: ' . filesize($integrator->getCategoriesFile()));
+                header('Content-Disposition: attachment; filename="categories.xml"');
                 readfile($integrator->getCategoriesFile());
                 die;
             }

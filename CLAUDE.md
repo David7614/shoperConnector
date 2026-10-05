@@ -84,10 +84,13 @@ php vendor/bin/codecept run functional
 - Cron schedule: countries daily, queue prep nightly, integrations every 10 min
 
 ### Feed URLs
-Feeds are served by `modules/xml_generator/controllers/*Controller.php`. `urlManager.rules` is empty, so only the default Yii routing works:
+Feeds are served by `modules/xml_generator/controllers/*Controller.php`. `urlManager.rules` in `config/web.php` is empty, but per-module rules are appended at bootstrap by `extensions/ModuleBootstrap.php`, which loads `modules/<module>/config/_routes.php`. Both URL forms work:
 
 ```
+https://shoper.sambaai.pl/xml/<user.uuid>/customers.xml
 https://shoper.sambaai.pl/xml_generator/customers/generate?uuid=<user.uuid>
 ```
 
-Same pattern for `products`, `orders`, `categories`. Note: `User::getCustomersUrl()` returns a pretty `/xml/<uuid>/customers.xml` form that has no matching route. The controller returns the plain text `Not ready yet` when the file is not in storage yet.
+Same pattern for `products`, `orders`, `categories`. The controller returns the plain text `Not ready yet` when the file is not in storage yet.
+
+Feeds can be large (the products feed for a 38k-product shop is ~180 MB), so they are streamed from MinIO in chunks and sent with `Content-Length` plus `Content-Disposition: attachment` — never load one into a string.

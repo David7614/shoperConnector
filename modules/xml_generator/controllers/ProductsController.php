@@ -24,11 +24,15 @@ class ProductsController extends Controller
                     return 'Not ready yet';
                 }
                 header('Content-type: application/xml; charset=utf-8');
+                header('Content-Length: ' . $storage->stat($key)['size']);
+                header('Content-Disposition: attachment; filename="products.xml"');
                 $storage->stream($key);
                 die;
             }
             if (is_file($integrator->getProductsFile())) {
                 header('Content-type: application/xml; charset=utf-8');
+                header('Content-Length: ' . filesize($integrator->getProductsFile()));
+                header('Content-Disposition: attachment; filename="products.xml"');
                 readfile($integrator->getProductsFile());
                 die;
             }
