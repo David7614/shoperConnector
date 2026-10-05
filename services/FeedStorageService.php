@@ -3,6 +3,7 @@ namespace app\services;
 
 use Aws\S3\S3Client;
 use Aws\S3\Exception\S3Exception;
+use Yii;
 
 /**
  * S3-compatible object storage for XML feeds (Stackhero MinIO).
@@ -205,6 +206,143 @@ class FeedStorageService
             if (ob_get_level()) ob_flush();
             flush();
         }
+    }
+
+    /**
+     * Rozmiar i data modyfikacji obiektu - bez pobierania tresci.
+     */
+    public function stat(string $key): array
+    {
+        $head = $this->s3->headObject([
+            'Bucket' => $this->bucket,
+            'Key'    => $key,
+        ]);
+
+        return [
+            'size'  => (int) $head['ContentLength'],
+            'mtime' => (string) $head['LastModified'],
+        ];
+    }
+
+    /**
+     * Zlicza wystapienia w obiekcie bez wciagania go do pamieci.
+     * Feedy potrafia miec setki MB, a memory_limit na dynie to 128M.
+     */
+    public function countOccurrences(string $key, string $needle, int $chunkSize = 1048576): int
+    {
+        $result = $this->s3->getObject([
+            'Bucket' => $this->bucket,
+            'Key'    => $key,
+            '@http'  => ['stream' => true],
+        ]);
+
+        $body = $result['Body'];
+
+        $reader = (static function () use ($body, $chunkSize): \Generator {
+            while (!$body->eof()) {
+                yield $body->read($chunkSize);
+            }
+        })();
+
+        return self::countInChunks($reader, $needle);
+    }
+
+    /**
+     * Jak countOccurrences(), ale wynik jest zapamietywany. Klucz cache zawiera
+     * rozmiar i date modyfikacji obiektu, wiec po przebudowie feedu licznik
+     * przeliczy sie sam.
+     */
+    public function countOccurrencesCached(string $key, string $needle): int
+    {
+        $cache = Yii::$app->has('cache') ? Yii::$app->cache : null;
+
+        if (!$cache) {
+            return $this->countOccurrences($key, $needle);
+        }
+
+        $stat     = $this->stat($key);
+        $cacheKey = ['feed-elements', $key, $needle, $stat['size'], $stat['mtime']];
+
+        $cached = $cache->get($cacheKey);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+
+        $count = $this->countOccurrences($key, $needle);
+        $cache->set($cacheKey, $count);
+
+        return $count;
+    }
+
+    /**
+     * Odpowiednik countOccurrences() dla pliku na dysku.
+     */
+    public static function countOccurrencesInFile(string $file, string $needle, int $chunkSize = 1048576): int
+    {
+        $handle = @fopen($file, 'rb');
+        if (!$handle) {
+            return 0;
+        }
+
+        $reader = (static function () use ($handle, $chunkSize): \Generator {
+            while (!feof($handle)) {
+                yield fread($handle, $chunkSize);
+            }
+        })();
+
+        $count = self::countInChunks($reader, $needle);
+        fclose($handle);
+
+        return $count;
+    }
+
+    /**
+     * Odpowiednik countOccurrencesCached() dla pliku na dysku.
+     */
+    public static function countOccurrencesInFileCached(string $file, string $needle): int
+    {
+        $cache = Yii::$app->has('cache') ? Yii::$app->cache : null;
+
+        if (!$cache || !is_file($file)) {
+            return self::countOccurrencesInFile($file, $needle);
+        }
+
+        $cacheKey = ['feed-elements-file', $file, $needle, filesize($file), filemtime($file)];
+
+        $cached = $cache->get($cacheKey);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+
+        $count = self::countOccurrencesInFile($file, $needle);
+        $cache->set($cacheKey, $count);
+
+        return $count;
+    }
+
+    /**
+     * Ogon o dlugosci needle-1 przenosimy do kolejnej paczki, zeby nie zgubic
+     * wystapienia rozjechanego na granicy chunkow. Podwojnie nie policzy, bo
+     * w ogonie nie zmiesci sie cale needle.
+     *
+     * @param iterable<string|false> $chunks
+     */
+    private static function countInChunks(iterable $chunks, string $needle): int
+    {
+        $overlap = strlen($needle) - 1;
+        $count   = 0;
+        $tail    = '';
+
+        foreach ($chunks as $data) {
+            if ($data === '' || $data === false) {
+                break;
+            }
+            $buffer = $tail . $data;
+            $count += substr_count($buffer, $needle);
+            $tail   = $overlap > 0 ? substr($buffer, -$overlap) : '';
+        }
+
+        return $count;
     }
 
     public function get(string $key): string

@@ -1,6 +1,7 @@
 <?php
 namespace app\controllers;
 
+use app\services\FeedStorageService;
 use app\services\QueueRunnerService;
 use app\services\SettingsService;
 use app\models\IntegrationData;
@@ -203,14 +204,14 @@ class AdminController extends Controller
                     if (!$storage->exists($storageKey)) {
                         $filesInfo[$key]['status'] = 'Nie gotowy';
                     } else {
-                        $filesInfo[$key]['elements'] = substr_count($storage->get($storageKey), '<' . $tag . '>');
+                        $filesInfo[$key]['elements'] = $storage->countOccurrencesCached($storageKey, '<' . $tag . '>');
                     }
                 } else {
                     $fileName = $shoperIntegrator->{$shoperLocalFileMap[$storageType]}();
                     if (!is_file($fileName)) {
                         $filesInfo[$key]['status'] = 'Nie gotowy';
                     } else {
-                        $filesInfo[$key]['elements'] = substr_count(file_get_contents($fileName), '<' . $tag . '>');
+                        $filesInfo[$key]['elements'] = FeedStorageService::countOccurrencesInFileCached($fileName, '<' . $tag . '>');
                     }
                 }
             } elseif ($useStorage) {
@@ -218,14 +219,14 @@ class AdminController extends Controller
                 if (!$storage->exists($storageKey)) {
                     $filesInfo[$key]['status'] = 'Nie gotowy';
                 } else {
-                    $filesInfo[$key]['elements'] = substr_count($storage->get($storageKey), '<' . $tag . '>');
+                    $filesInfo[$key]['elements'] = $storage->countOccurrencesCached($storageKey, '<' . $tag . '>');
                 }
             } else {
                 $fileName = $localPaths[$key];
                 if (!is_file($fileName)) {
                     $filesInfo[$key]['status'] = 'Nie gotowy';
                 } else {
-                    $filesInfo[$key]['elements'] = substr_count(file_get_contents($fileName), '<' . $tag . '>');
+                    $filesInfo[$key]['elements'] = FeedStorageService::countOccurrencesInFileCached($fileName, '<' . $tag . '>');
                 }
             }
         }
@@ -823,12 +824,12 @@ class AdminController extends Controller
                 if ($storage) {
                     $key = $integrator->{$minioKeyMap[$type]}();
                     $counts[$type] = $storage->exists($key)
-                        ? substr_count($storage->get($key), '<' . $tag . '>')
+                        ? $storage->countOccurrencesCached($key, '<' . $tag . '>')
                         : null;
                 } else {
                     $file = $integrator->{$localFileMap[$type]}();
                     $counts[$type] = file_exists($file)
-                        ? substr_count(file_get_contents($file), '<' . $tag . '>')
+                        ? FeedStorageService::countOccurrencesInFileCached($file, '<' . $tag . '>')
                         : null;
                 }
             }
@@ -837,13 +838,13 @@ class AdminController extends Controller
                 if ($storage) {
                     $key = $type . '/' . $user->uuid . '/' . $type . '.xml';
                     $counts[$type] = $storage->exists($key)
-                        ? substr_count($storage->get($key), '<' . $tag . '>')
+                        ? $storage->countOccurrencesCached($key, '<' . $tag . '>')
                         : null;
                 } else {
                     $base = \app\modules\xml_generator\src\XmlFeed::getFeedsBasePath();
                     $file = $base . '/' . $type . '/' . $user->uuid . '/' . $type . '.xml';
                     $counts[$type] = file_exists($file)
-                        ? substr_count(file_get_contents($file), '<' . $tag . '>')
+                        ? FeedStorageService::countOccurrencesInFileCached($file, '<' . $tag . '>')
                         : null;
                 }
             }

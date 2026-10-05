@@ -15,6 +15,7 @@ use yii\filters\VerbFilter;
 use app\models\LoginForm;
 use app\models\ContactForm;
 use app\modules\xml_generator\src\XmlFeed;
+use app\services\FeedStorageService;
 
 class SiteController extends Controller
 {
@@ -201,7 +202,6 @@ class SiteController extends Controller
                 $filesInfo[$type]['elements']=0;
                 // echo "BRAK PLIKU ".$fileName.PHP_EOL;
             }else{
-                $xml=file_get_contents($fileName);
                 $tagName=strtoupper($type);
                 if ($type=='products'){
                     $tagName='PRODUCT';
@@ -209,7 +209,7 @@ class SiteController extends Controller
                 if ($type=='category'){
                     $tagName='ITEM';
                 }
-                $tag_count = substr_count($xml, "<".$tagName.">");
+                $tag_count = FeedStorageService::countOccurrencesInFileCached($fileName, "<".$tagName.">");
                 $filesInfo[$type]['elements']=$tag_count;
 
             }
