@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Yii;
 use yii\console\Controller;
 use yii\console\ExitCode;
+use yii\db\Query;
 use app\models\User;
 use SoapClient;
 use app\models\Customers;
@@ -170,20 +171,47 @@ class XmlGeneratorController extends Controller
                 $categoryMap[$c->category_id] = $c;
             }
 
-            // bez kompletu tlumaczen kategorii getFullPath() podstawi nazwy z innego
-            // jezyka - lepiej najpierw przepuscic import kategorii
+            // Bez kompletu tlumaczen getFullPath() podstawi nazwy z jezyka zapasowego.
+            // Liczba kategorii z wiecej niz jednym jezykiem mowi, czy import kategorii
+            // z poprawka juz przeszedl: przed poprawka kazda kategoria miala dokladnie
+            // jeden wiersz, niezaleznie od tego ile jezykow ma sklep.
+            $totalCategories = count($categoryMap);
             $locales = Product::find()->select('translation')->distinct()
                 ->where(['user_id' => $user->id])->column();
+
+            $coverage = [];
             foreach ($locales as $locale) {
-                $have = ShoperCategoriesLanguage::find()->alias('l')
+                $coverage[$locale] = (int) ShoperCategoriesLanguage::find()->alias('l')
                     ->innerJoin(['c' => ShoperCategories::tableName()], 'c.id = l.shoper_categories_id')
                     ->where(['c.shoper_shops_id' => $integrator->id, 'l.translation' => $locale])
                     ->count();
-                if ($have < count($categoryMap)) {
-                    echo "[{$user->id}] UWAGA: $locale ma tlumaczenia tylko dla $have z "
-                        . count($categoryMap) . " kategorii - reszta dostanie nazwy z innego jezyka."
-                        . " Najpierw przepusc import kategorii (kolejka 'category')." . PHP_EOL;
-                }
+            }
+
+            $multiLang = (new Query())
+                ->select('l.shoper_categories_id')
+                ->from(['l' => ShoperCategoriesLanguage::tableName()])
+                ->innerJoin(['c' => ShoperCategories::tableName()], 'c.id = l.shoper_categories_id')
+                ->where(['c.shoper_shops_id' => $integrator->id])
+                ->groupBy('l.shoper_categories_id')
+                ->having('COUNT(*) > 1')
+                ->count();
+
+            $coverageText = [];
+            foreach ($coverage as $locale => $have) {
+                $coverageText[] = "$locale $have/$totalCategories";
+            }
+
+            echo "[{$user->id}] kategorie: $totalCategories, pokrycie tlumaczen: "
+                . implode(', ', $coverageText) . PHP_EOL;
+            echo "[{$user->id}] kategorii z wiecej niz jednym jezykiem: $multiLang" . PHP_EOL;
+
+            if (count($locales) > 1 && $multiLang == 0) {
+                echo "[{$user->id}] UWAGA: import kategorii z poprawka jeszcze nie przeszedl calosci."
+                    . " Jedno wywolanie generate-categories przerabia JEDNA strone API,"
+                    . " cale przejscie robi loop-categories." . PHP_EOL;
+            } elseif (array_sum($coverage) < $totalCategories * count($locales)) {
+                echo "[{$user->id}] Kategorie bez wiersza w danym jezyku nie maja tam nazwy"
+                    . " po stronie Shopera - dostana nazwe z jezyka zapasowego." . PHP_EOL;
             }
 
             $pathCache = [];

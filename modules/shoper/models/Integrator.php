@@ -184,6 +184,8 @@ class Integrator extends ShoperShops{
         $queue->save();
 
         $feedLanguage = self::getFeedLanguage($queue->getCurrentUser());
+        $savedTranslations = 0;
+        $emptyTranslations = 0;
 
         foreach ($categoriesResponse as $res){
             $category=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
@@ -198,6 +200,13 @@ class Integrator extends ShoperShops{
             }
             foreach ($res->translations as $lang=>$trans){
                 if ($feedLanguage && $lang !== $feedLanguage){
+                    continue;
+                }
+                // Shoper zwraca komplet locale sklepu, ale kategoria nieprzetlumaczona
+                // ma puste name/permalink - nie ma czego zapisac (walidacja i tak by to
+                // odrzucila, zostawialo to tylko smieci z print_r w logu kolejki)
+                if (trim((string)$trans->name) === '' || trim((string)$trans->permalink) === ''){
+                    $emptyTranslations++;
                     continue;
                 }
                 $langCat=ShoperCategoriesLanguage::findOne(['shoper_categories_id'=>$category->id, 'translation'=>$lang]);
@@ -216,9 +225,14 @@ class Integrator extends ShoperShops{
                 $langCat->permalink=$trans->permalink;
                 if (!$langCat->save()){
                     print_r($langCat->getErrors());
+                }else{
+                    $savedTranslations++;
                 }
             }
         }
+
+        echo "[category] page " . $queue->page . " of " . $queue->max_page
+            . ": tlumaczen zapisanych $savedTranslations, pustych pominietych $emptyTranslations" . PHP_EOL;
 
         if ($queue->max_page <= $queue->page){
             $this->generateCategoriesTree($client);
