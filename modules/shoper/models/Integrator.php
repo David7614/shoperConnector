@@ -186,8 +186,20 @@ class Integrator extends ShoperShops{
         $feedLanguage = self::getFeedLanguage($queue->getCurrentUser());
         $savedTranslations = 0;
         $emptyTranslations = 0;
+        $localesLogged = false;
 
         foreach ($categoriesResponse as $res){
+            // jednorazowo na strone: co API w ogole zwraca w translations
+            if (!$localesLogged){
+                $localesFromApi = [];
+                foreach ($res->translations as $lang => $trans){
+                    $localesFromApi[] = $lang . '=' . (trim((string)$trans->name) === '' ? 'puste' : 'ok');
+                }
+                echo "[category] kategoria " . $res->category_id . " zwrocila locale: "
+                    . implode(', ', $localesFromApi) . PHP_EOL;
+                $localesLogged = true;
+            }
+
             $category=ShoperCategories::findOne(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
             if (!$category){
                 $category = new ShoperCategories(['shoper_shops_id'=>$this->id, 'category_id'=>$res->category_id]);
