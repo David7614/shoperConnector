@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Yii;
 use yii\console\Controller;
 use yii\console\ExitCode;
+use yii\db\Expression;
 use yii\db\Query;
 use app\models\User;
 use SoapClient;
@@ -240,52 +241,60 @@ class XmlGeneratorController extends Controller
             $reportedAt     = 0;
             $pendingUpdates = [];
 
+            // response potrafi miec po 7 kB na wiersz (dla 394 to 357 MB lacznie) - przez
+            // siec do zdalnej bazy skan trwalby wieki, wiec category_id wycinamy w MySQL
+            $categoryIdExpr = new Expression(
+                "CASE WHEN LOCATE('s:11:\"category_id\";', response) > 0"
+                . " THEN SUBSTRING(response, LOCATE('s:11:\"category_id\";', response) + 19, 32)"
+                . " ELSE '' END"
+            );
+
             while (true) {
-                $batch = Product::find()
-                    ->select(['ID', 'PRODUCT_ID', 'translation', 'CATEGORYTEXT', 'response'])
+                $batch = (new Query())
+                    ->select(['ID', 'PRODUCT_ID', 'translation', 'CATEGORYTEXT', 'cat_raw' => $categoryIdExpr])
+                    ->from(Product::tableName())
                     ->where(['user_id' => $user->id])
                     ->andWhere(['>', 'ID', $lastId])
                     ->orderBy(['ID' => SORT_ASC])
-                    ->limit(500)
+                    ->limit(1000)
                     ->all();
 
                 if (!$batch) {
                     break;
                 }
 
-                foreach ($batch as $product) {
-                    $lastId = $product->ID;
+                foreach ($batch as $row) {
+                    $lastId = $row['ID'];
                     $checked++;
 
-                    $res = @unserialize($product->response);
-                    if (!is_object($res) || !isset($res->category_id)) {
+                    $categoryId = $this->extractCategoryId($row['cat_raw'], (int) $row['ID']);
+                    if ($categoryId === null) {
                         $skipped++;
                         continue;
                     }
 
-                    $categoryId = (int) $res->category_id;
-                    $key        = $categoryId . '|' . $product->translation;
+                    $key = $categoryId . '|' . $row['translation'];
 
                     if (!isset($pathCache[$key])) {
                         $pathCache[$key] = isset($categoryMap[$categoryId])
-                            ? $categoryMap[$categoryId]->getFullPath($product->translation)
+                            ? $categoryMap[$categoryId]->getFullPath($row['translation'])
                             : 'brak';
                     }
 
-                    if ($pathCache[$key] === $product->CATEGORYTEXT) {
+                    if ($pathCache[$key] === $row['CATEGORYTEXT']) {
                         continue;
                     }
 
                     $changed++;
                     if (count($examples) < 3) {
-                        $examples[] = "  #{$product->PRODUCT_ID} ({$product->translation})" . PHP_EOL
-                            . "    bylo:  " . $product->CATEGORYTEXT . PHP_EOL
+                        $examples[] = "  #{$row['PRODUCT_ID']} ({$row['translation']})" . PHP_EOL
+                            . "    bylo:  " . $row['CATEGORYTEXT'] . PHP_EOL
                             . "    bedzie: " . $pathCache[$key];
                     }
 
                     // wiele produktow dzieli te sama sciezke - grupujemy, zeby zamiast
                     // dziesiatek tysiecy pojedynczych UPDATE poszlo kilka na partie
-                    $pendingUpdates[$pathCache[$key]][] = $product->ID;
+                    $pendingUpdates[$pathCache[$key]][] = $row['ID'];
                 }
 
                 if ($apply && $pendingUpdates) {
@@ -313,6 +322,24 @@ class XmlGeneratorController extends Controller
         echo PHP_EOL . ($apply ? "Zapisano: $totalChanged" : "Do poprawy lacznie: $totalChanged") . PHP_EOL;
 
         return ExitCode::OK;
+    }
+
+    /**
+     * Wyciaga category_id z wycinka serializowanego response (s:4:"1621" albo i:1621).
+     * Gdy format jest inny, dociaga response tylko dla tego jednego wiersza.
+     */
+    private function extractCategoryId($raw, int $productRowId): ?int
+    {
+        $raw = explode(';', (string) $raw)[0];
+
+        if (preg_match('/^s:\d+:"(\d+)"$/', $raw, $m) || preg_match('/^i:(\d+)$/', $raw, $m)) {
+            return (int) $m[1];
+        }
+
+        $response = Product::find()->select('response')->where(['ID' => $productRowId])->scalar();
+        $res      = @unserialize((string) $response);
+
+        return (is_object($res) && isset($res->category_id)) ? (int) $res->category_id : null;
     }
 
     public function actionGenerateCategories($forceId=0)
