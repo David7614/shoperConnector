@@ -212,14 +212,33 @@ class XmlGeneratorController extends Controller
             } elseif (array_sum($coverage) < $totalCategories * count($locales)) {
                 echo "[{$user->id}] Kategorie bez wiersza w danym jezyku nie maja tam nazwy"
                     . " po stronie Shopera - dostana nazwe z jezyka zapasowego." . PHP_EOL;
+
+                foreach ($coverage as $locale => $have) {
+                    if ($have >= $totalCategories) {
+                        continue;
+                    }
+                    $missing = (new Query())
+                        ->select('c.category_id')
+                        ->from(['c' => ShoperCategories::tableName()])
+                        ->leftJoin(['l' => ShoperCategoriesLanguage::tableName()],
+                            'l.shoper_categories_id = c.id AND l.translation = :loc', [':loc' => $locale])
+                        ->where(['c.shoper_shops_id' => $integrator->id])
+                        ->andWhere(['l.id' => null])
+                        ->limit(30)
+                        ->column();
+                    echo "[{$user->id}]   bez $locale (" . ($totalCategories - $have) . "): "
+                        . implode(', ', $missing) . PHP_EOL;
+                }
             }
 
-            $pathCache = [];
-            $checked   = 0;
-            $changed   = 0;
-            $skipped   = 0;
-            $examples  = [];
-            $lastId    = 0;
+            $pathCache      = [];
+            $checked        = 0;
+            $changed        = 0;
+            $skipped        = 0;
+            $examples       = [];
+            $lastId         = 0;
+            $reportedAt     = 0;
+            $pendingUpdates = [];
 
             while (true) {
                 $batch = Product::find()
@@ -264,9 +283,21 @@ class XmlGeneratorController extends Controller
                             . "    bedzie: " . $pathCache[$key];
                     }
 
-                    if ($apply) {
-                        $product->updateAttributes(['CATEGORYTEXT' => $pathCache[$key]]);
+                    // wiele produktow dzieli te sama sciezke - grupujemy, zeby zamiast
+                    // dziesiatek tysiecy pojedynczych UPDATE poszlo kilka na partie
+                    $pendingUpdates[$pathCache[$key]][] = $product->ID;
+                }
+
+                if ($apply && $pendingUpdates) {
+                    foreach ($pendingUpdates as $value => $ids) {
+                        Product::updateAll(['CATEGORYTEXT' => (string) $value], ['ID' => $ids]);
                     }
+                }
+                $pendingUpdates = [];
+
+                if ($checked - $reportedAt >= 5000) {
+                    $reportedAt = $checked;
+                    echo "[{$user->id}] ... sprawdzonych $checked, do poprawy $changed" . PHP_EOL;
                 }
             }
 
