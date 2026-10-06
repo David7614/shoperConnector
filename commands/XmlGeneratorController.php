@@ -172,6 +172,28 @@ class XmlGeneratorController extends Controller
                 $categoryMap[$c->category_id] = $c;
             }
 
+            // getFullPath() chodzi po drzewie zapytanie po zapytaniu (rodzic + tlumaczenie
+            // na kazdym poziomie). Przy zdalnej bazie to godziny, wiec tlumaczenia
+            // wczytujemy raz i sciezki skladamy w pamieci.
+            $translations = [];
+            $fallbacks    = [];
+            $langRows = (new Query())
+                ->select(['l.shoper_categories_id', 'l.translation', 'l.name'])
+                ->from(['l' => ShoperCategoriesLanguage::tableName()])
+                ->innerJoin(['c' => ShoperCategories::tableName()], 'c.id = l.shoper_categories_id')
+                ->where(['c.shoper_shops_id' => $integrator->id])
+                ->orderBy(['l.isdefault' => SORT_DESC, 'l.id' => SORT_ASC])
+                ->all();
+            foreach ($langRows as $r) {
+                $translations[$r['shoper_categories_id']][$r['translation']] = $r['name'];
+                // pierwszy wiersz w tej kolejnosci to dokladnie to, co zwraca
+                // ShoperCategories::getTranslated() przy braku zadanego locale
+                if (!isset($fallbacks[$r['shoper_categories_id']])) {
+                    $fallbacks[$r['shoper_categories_id']] = $r['name'];
+                }
+            }
+            unset($langRows);
+
             // Bez kompletu tlumaczen getFullPath() podstawi nazwy z jezyka zapasowego.
             // Liczba kategorii z wiecej niz jednym jezykiem mowi, czy import kategorii
             // z poprawka juz przeszedl: przed poprawka kazda kategoria miala dokladnie
@@ -277,7 +299,7 @@ class XmlGeneratorController extends Controller
 
                     if (!isset($pathCache[$key])) {
                         $pathCache[$key] = isset($categoryMap[$categoryId])
-                            ? $categoryMap[$categoryId]->getFullPath($row['translation'])
+                            ? $this->buildCategoryPath($categoryId, $row['translation'], $categoryMap, $translations, $fallbacks)
                             : 'brak';
                     }
 
@@ -322,6 +344,37 @@ class XmlGeneratorController extends Controller
         echo PHP_EOL . ($apply ? "Zapisano: $totalChanged" : "Do poprawy lacznie: $totalChanged") . PHP_EOL;
 
         return ExitCode::OK;
+    }
+
+    /**
+     * Odpowiednik ShoperCategories::getFullPath(), ale bez zapytan - na mapach
+     * zbudowanych raz dla calego sklepu.
+     */
+    private function buildCategoryPath($categoryId, $locale, array $categoryMap, array $translations, array $fallbacks): string
+    {
+        $chain = [];
+        $current = $categoryId;
+
+        while (isset($categoryMap[$current]) && count($chain) < 50) {
+            $category = $categoryMap[$current];
+            $chain[]  = $category;
+
+            $parentId = (int) $category->parent_id;
+            if (!$parentId) {
+                break;
+            }
+            $current = $parentId;
+        }
+
+        $parts = [];
+        foreach (array_reverse($chain) as $category) {
+            $name = $translations[$category->id][$locale] ?? ($fallbacks[$category->id] ?? null);
+            $parts[] = $name !== null
+                ? $name
+                : $category->category_id . ' no ' . $locale . 'translation ';
+        }
+
+        return implode('|', $parts);
     }
 
     /**
