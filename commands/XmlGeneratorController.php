@@ -17,6 +17,9 @@ use yii\console\ExitCode;
 use app\models\User;
 use SoapClient;
 use app\models\Customers;
+use app\models\Product;
+use app\modules\shoper\models\ShoperCategories;
+use app\modules\shoper\models\ShoperCategoriesLanguage;
 use app\modules\shoper\models\ShoperShops;
 use app\services\QueueRunnerService;
 
@@ -118,6 +121,137 @@ class XmlGeneratorController extends Controller
         }
 
         echo PHP_EOL . "Pole dziala, jesli zwraca wyraznie mniej stron niz '(bez filtra)'." . PHP_EOL;
+
+        return ExitCode::OK;
+    }
+
+    /**
+     * Przelicza product.CATEGORYTEXT ze sciezki kategorii w bazie, bez odpytywania API.
+     *
+     * CATEGORYTEXT jest cache'em zapisywanym tylko przy imporcie produktu, a import
+     * pomija produkty o niezmienionym params_hash (i tak ich nie pobiera przy
+     * exporcie inkrementalnym). Wpisy zapisane przed naprawa tlumaczen kategorii
+     * ("4237 no pl_PLtranslation |...") nigdy same sie wiec nie odswieza.
+     *
+     * Najpierw trzeba przepuscic import kategorii (kolejka 'category', leci co noc),
+     * zeby w shoper_categories_language byly wiersze we wszystkich jezykach - inaczej
+     * getFullPath() podstawi nazwy z jezyka, ktory akurat jest w bazie.
+     *
+     * php yii xml-generator/rebuild-category-text <userId|0 = wszystkie sklepy> [apply=0]
+     */
+    public function actionRebuildCategoryText($userId, $apply = 0)
+    {
+        $apply = (int) $apply;
+
+        $users = (int) $userId
+            ? User::find()->where(['id' => (int) $userId])->all()
+            : User::find()->where(['shop_type' => 'shoper'])->all();
+
+        if (!$users) {
+            echo "Nie ma takiego uzytkownika" . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        if (!$apply) {
+            echo "TRYB PODGLADU - nic nie zapisuje. Zeby zapisac: dopisz 1 jako drugi argument." . PHP_EOL . PHP_EOL;
+        }
+
+        $totalChanged = 0;
+
+        foreach ($users as $user) {
+            $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);
+            if (!$integrator) {
+                echo "[{$user->id}] {$user->username} - brak integratora, pomijam" . PHP_EOL;
+                continue;
+            }
+
+            $categoryMap = [];
+            foreach (ShoperCategories::find()->where(['shoper_shops_id' => $integrator->id])->all() as $c) {
+                $categoryMap[$c->category_id] = $c;
+            }
+
+            // bez kompletu tlumaczen kategorii getFullPath() podstawi nazwy z innego
+            // jezyka - lepiej najpierw przepuscic import kategorii
+            $locales = Product::find()->select('translation')->distinct()
+                ->where(['user_id' => $user->id])->column();
+            foreach ($locales as $locale) {
+                $have = ShoperCategoriesLanguage::find()->alias('l')
+                    ->innerJoin(['c' => ShoperCategories::tableName()], 'c.id = l.shoper_categories_id')
+                    ->where(['c.shoper_shops_id' => $integrator->id, 'l.translation' => $locale])
+                    ->count();
+                if ($have < count($categoryMap)) {
+                    echo "[{$user->id}] UWAGA: $locale ma tlumaczenia tylko dla $have z "
+                        . count($categoryMap) . " kategorii - reszta dostanie nazwy z innego jezyka."
+                        . " Najpierw przepusc import kategorii (kolejka 'category')." . PHP_EOL;
+                }
+            }
+
+            $pathCache = [];
+            $checked   = 0;
+            $changed   = 0;
+            $skipped   = 0;
+            $examples  = [];
+            $lastId    = 0;
+
+            while (true) {
+                $batch = Product::find()
+                    ->select(['ID', 'PRODUCT_ID', 'translation', 'CATEGORYTEXT', 'response'])
+                    ->where(['user_id' => $user->id])
+                    ->andWhere(['>', 'ID', $lastId])
+                    ->orderBy(['ID' => SORT_ASC])
+                    ->limit(500)
+                    ->all();
+
+                if (!$batch) {
+                    break;
+                }
+
+                foreach ($batch as $product) {
+                    $lastId = $product->ID;
+                    $checked++;
+
+                    $res = @unserialize($product->response);
+                    if (!is_object($res) || !isset($res->category_id)) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $categoryId = (int) $res->category_id;
+                    $key        = $categoryId . '|' . $product->translation;
+
+                    if (!isset($pathCache[$key])) {
+                        $pathCache[$key] = isset($categoryMap[$categoryId])
+                            ? $categoryMap[$categoryId]->getFullPath($product->translation)
+                            : 'brak';
+                    }
+
+                    if ($pathCache[$key] === $product->CATEGORYTEXT) {
+                        continue;
+                    }
+
+                    $changed++;
+                    if (count($examples) < 3) {
+                        $examples[] = "  #{$product->PRODUCT_ID} ({$product->translation})" . PHP_EOL
+                            . "    bylo:  " . $product->CATEGORYTEXT . PHP_EOL
+                            . "    bedzie: " . $pathCache[$key];
+                    }
+
+                    if ($apply) {
+                        $product->updateAttributes(['CATEGORYTEXT' => $pathCache[$key]]);
+                    }
+                }
+            }
+
+            echo "[{$user->id}] {$user->username}: sprawdzonych $checked, do poprawy $changed"
+                . ($skipped ? ", pominietych (brak response) $skipped" : '') . PHP_EOL;
+            foreach ($examples as $example) {
+                echo $example . PHP_EOL;
+            }
+
+            $totalChanged += $changed;
+        }
+
+        echo PHP_EOL . ($apply ? "Zapisano: $totalChanged" : "Do poprawy lacznie: $totalChanged") . PHP_EOL;
 
         return ExitCode::OK;
     }
