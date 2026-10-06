@@ -347,6 +347,53 @@ class XmlGeneratorController extends Controller
     }
 
     /**
+     * Przebudowuje sam plik feedu z tego, co juz jest w bazie - bez importu z API.
+     *
+     * Feed to statyczny plik w MinIO, budowany dopiero gdy kolejka dojdzie do
+     * ostatniej strony. Po recznej poprawce danych (np. rebuild-category-text)
+     * XML zostaje stary az do nastepnego pelnego przebiegu kolejki.
+     *
+     * php yii xml-generator/rebuild-feed-file <userId> [product|category|customer|order]
+     */
+    public function actionRebuildFeedFile($userId, $type = 'product')
+    {
+        $user = User::findOne((int) $userId);
+        if (!$user) {
+            echo "Nie ma uzytkownika #$userId" . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        $integrator = Integrator::findOne(['shop_url' => 'https://' . $user->username]);
+        if (!$integrator) {
+            echo "Nie ma integratora dla " . $user->username . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        // prepareFile() potrzebuje kolejki tylko po to, zeby poznac usera i typ
+        $queue = Queue::find()
+            ->where(['current_integrate_user' => $user->id, 'integration_type' => $type])
+            ->orderBy(['id' => SORT_DESC])
+            ->one();
+
+        if (!$queue) {
+            echo "Nie ma kolejki typu '$type' dla uzytkownika #{$user->id}" . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        echo "Buduje feed '$type' dla " . $user->username . PHP_EOL;
+        $start = microtime(true);
+
+        if (!$integrator->prepareFile($queue)) {
+            echo "Nie udalo sie zbudowac pliku" . PHP_EOL;
+            return ExitCode::UNSPECIFIED_ERROR;
+        }
+
+        echo sprintf("Gotowe w %.1fs", microtime(true) - $start) . PHP_EOL;
+
+        return ExitCode::OK;
+    }
+
+    /**
      * Odpowiednik ShoperCategories::getFullPath(), ale bez zapytan - na mapach
      * zbudowanych raz dla calego sklepu.
      */
