@@ -31,6 +31,9 @@ class Integrator extends ShoperShops{
 
     const XML_PAGE_SIZE=10000; // 50000
 
+    /** @var array<int|string, string>|null tag_id => name, ladowane raz na budowe feedu */
+    private $userTagNames = null;
+
     const FEED_LANGUAGE_CONFIG_KEY = 'shoper_feed_language';
 
     public static function shoperLog ($message, $queueId = 0) {
@@ -635,6 +638,22 @@ class Integrator extends ShoperShops{
 
             return $existing->save();
         }
+    }
+
+    /**
+     * Nazwa tagu klienta z pamieci zamiast zapytania per tag per klient.
+     * Nieznany tag (usuniety w Shoperze) zwraca null i jest pomijany w feedzie.
+     */
+    private function getUserTagName($tagId): ?string
+    {
+        if ($this->userTagNames === null) {
+            $this->userTagNames = ShoperUserTag::find()
+                ->select(['name'])
+                ->where(['shoper_shops_id' => $this->id])
+                ->indexBy('tag_id')
+                ->column();
+        }
+        return $this->userTagNames[$tagId] ?? null;
     }
 
     /**
@@ -1373,9 +1392,12 @@ class Integrator extends ShoperShops{
         $tags = unserialize($customer->tags);
         if ($tags) {
             foreach ($tags as $tag) {
-                $Tag = ShoperUserTag::findOne(['shoper_shops_id' => $this->id, 'tag_id' => $tag]);
+                $tagName = $this->getUserTagName($tag);
+                if ($tagName === null) {
+                    continue;
+                }
                 $xml->startElement('PARAMETER');
-                $xml->writeElement('NAME', $Tag->name);
+                $xml->writeElement('NAME', $tagName);
                 $xml->writeElement('VALUE', '1');
                 $xml->endElement();
             }
@@ -1497,9 +1519,12 @@ class Integrator extends ShoperShops{
                 $tags=unserialize($customer->tags);
                 if ($tags){
                     foreach ($tags as $tag){
-                        $Tag=ShoperUserTag::findOne(['shoper_shops_id'=>$this->id, 'tag_id'=>$tag]);
+                        $tagName = $this->getUserTagName($tag);
+                        if ($tagName === null) {
+                            continue;
+                        }
                         $paramChild = $paramsChild->addChild('PARAMETER');
-                        $paramChild->addChild('NAME', $Tag->name);
+                        $paramChild->addChild('NAME', $tagName);
                         $paramChild->addChild('VALUE', '1');
                     }
                 }

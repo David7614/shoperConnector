@@ -32,10 +32,10 @@ class AdminController extends Controller
         return [
             'access' => [
                 'class' => AccessControl::className(),
-                'only'  => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins', 'hard-reset-type'],
+                'only'  => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins', 'hard-reset-type', 'reset-queue'],
                 'rules' => [
                     [
-                        'actions' => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins', 'hard-reset-type'],
+                        'actions' => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins', 'hard-reset-type', 'reset-queue'],
                         'allow'   => true,
                         'roles'   => ['admin'],
                     ],

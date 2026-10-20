@@ -66,6 +66,7 @@ $config = [
                     'class' => 'yii\log\FileTarget',
                     'logFile' => 'php://stderr',
                     'levels' => ['error', 'warning', 'info'],
+                    'except' => ['yii\db\*'],
                     'logVars' => [],
                     'enableRotation' => false,
                     'prefix' => function() { return ''; },
