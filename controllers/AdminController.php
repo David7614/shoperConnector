@@ -32,10 +32,10 @@ class AdminController extends Controller
         return [
             'access' => [
                 'class' => AccessControl::className(),
-                'only'  => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins'],
+                'only'  => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins', 'hard-reset-type'],
                 'rules' => [
                     [
-                        'actions' => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins'],
+                        'actions' => ['index', 'view', 'run-queue-output', 'restart-queue-output', 'update', 'queues', 'queues-sections', 'save-queues-autorefresh', 'save-queues-collapsed', 'refresh-feed-counts', 'prepare-queue-output', 'app-settings', 'admins', 'hard-reset-type'],
                         'allow'   => true,
                         'roles'   => ['admin'],
                     ],
@@ -45,6 +45,7 @@ class AdminController extends Controller
                 'class'   => VerbFilter::className(),
                 'actions' => [
                     'index' => ['get'],
+                    'hard-reset-type' => ['post'],
                 ],
             ],
         ];
@@ -787,13 +788,34 @@ class AdminController extends Controller
             }
         }
 
+        $hardResetDates = [];
+        foreach (array_keys(Queue::HARD_RESET_KEYS) as $t) {
+            $hardResetDates[$t] = $user->getUserDataValue('hard_reset_' . $t);
+        }
+
         return $this->render('view', [
-            'user'         => $user,
-            'allItems'     => $allItems,
-            'queueItems'   => $query->all(),
-            'filterType'   => $filterType,
-            'filterStatus' => $filterStatus,
+            'user'           => $user,
+            'allItems'       => $allItems,
+            'queueItems'     => $query->all(),
+            'filterType'     => $filterType,
+            'filterStatus'   => $filterStatus,
+            'hardResetDates' => $hardResetDates,
         ]);
+    }
+
+    public function actionHardResetType()
+    {
+        $userId = (int) Yii::$app->request->post('userId');
+        $type   = (string) Yii::$app->request->post('type');
+
+        $user = User::findOne($userId);
+        if (!$user || !Queue::hardReset($user, $type)) {
+            Yii::$app->session->addFlash('error', 'Nieprawidłowe parametry resetu.');
+            return $this->redirect(['admin/view', 'id' => $userId]);
+        }
+
+        Yii::$app->session->addFlash('success', 'Twardy reset kolejki „' . $type . '" wykonany.');
+        return $this->redirect(['admin/view', 'id' => $userId]);
     }
 
     public function actionRefreshFeedCounts()

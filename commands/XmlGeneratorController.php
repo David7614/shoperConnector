@@ -19,7 +19,6 @@ use yii\db\Query;
 use app\models\User;
 use SoapClient;
 use app\models\Customers;
-use app\models\IntegrationData;
 use app\models\Product;
 use app\modules\shoper\models\ShoperCategories;
 use app\modules\shoper\models\ShoperCategoriesLanguage;
@@ -478,12 +477,25 @@ class XmlGeneratorController extends Controller
     }
     
     /**
-     * Wymusza pelne pobranie klientow, adresow i subskrybentow w nastepnym cyklu.
+     * Twardy reset typu kolejki (jak przycisk w admin/view): pelne pobranie z API od razu.
+     */
+    public function actionHardReset(int $userId, string $type)
+    {
+        $user = User::findOne($userId);
+        if (!$user || !Queue::hardReset($user, $type)) {
+            echo "invalid user or type, allowed: " . implode(', ', array_keys(Queue::HARD_RESET_KEYS)) . PHP_EOL;
+            return ExitCode::DATAERR;
+        }
+        echo "user {$userId}: hard reset of {$type} done, queue added" . PHP_EOL;
+        return ExitCode::OK;
+    }
+
+    /**
+     * Wymusza pelne pobranie klientow, adresow i subskrybentow - od razu, z nowa kolejka.
      */
     public function actionResetCustomers(int $userId)
     {
-        IntegrationData::setData('INITIAL_CUSTOMERS_DONE', '0', $userId);
-        echo "user {$userId}: next customer queue will fetch all customers" . PHP_EOL;
+        return $this->actionHardReset($userId, 'customer');
     }
 
     public function actionResetExceptions()

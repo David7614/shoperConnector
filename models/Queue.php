@@ -291,6 +291,63 @@ class Queue extends \yii\db\ActiveRecord
         return $completed;
     }
 
+    /**
+     * Klucze integration_data sterujace przyrostowym pobieraniem, per typ kolejki.
+     */
+    const HARD_RESET_KEYS = [
+        'customer' => ['INITIAL_CUSTOMERS_DONE', 'last_customer_integration_date'],
+        'product'  => ['INITIAL_PRODUCTS_DONE', 'LAST_PRODUCTS_DONE'],
+        'order'    => ['INITIAL_ORDERS_DONE', 'LAST_ORDERS_DONE'],
+        'category' => [],
+        'tags'     => [],
+    ];
+
+    /**
+     * Twardy reset typu: kasuje daty i flagi przyrostowego pobierania i dodaje kolejke
+     * z data z przeszlosci, wiec automat od razu pobiera z API wszystko od nowa.
+     * Tabel danych nie czyscimy - customers trzyma pelna baze do deduplikacji subskrybentow,
+     * a reszta i tak idzie upsertem.
+     */
+    public static function hardReset(User $user, string $type): bool
+    {
+        if (!array_key_exists($type, self::HARD_RESET_KEYS)) {
+            return false;
+        }
+
+        foreach (self::HARD_RESET_KEYS[$type] as $key) {
+            IntegrationData::deleteAll(['task' => $key, 'customer_id' => $user->id]);
+        }
+
+        $pastDate = date('Y-m-d H:i:s', strtotime('-1 day'));
+
+        $dataQueue                         = new self();
+        $dataQueue->current_integrate_user = $user->id;
+        $dataQueue->integration_type       = $type;
+        $dataQueue->integrated             = self::PENDING;
+        $dataQueue->next_integration_date  = $pastDate;
+        $dataQueue->page                   = 0;
+        $dataQueue->max_page               = 0;
+        $dataQueue->parameters             = '';
+        $dataQueue->save(false);
+
+        // dla shopera osobna kolejka skladania pliku jest tylko przy klientach (jak w prepareQueue)
+        if ($type === 'customer') {
+            $xmlQueue                         = new self();
+            $xmlQueue->current_integrate_user = $user->id;
+            $xmlQueue->integration_type       = $type;
+            $xmlQueue->integrated             = self::PENDING;
+            $xmlQueue->next_integration_date  = date('Y-m-d H:i:s', strtotime($pastDate . ' + 10 minutes'));
+            $xmlQueue->page                   = 0;
+            $xmlQueue->max_page               = 0;
+            $xmlQueue->setAdditionalParameters(['objects_done' => 1]);
+            $xmlQueue->save(false);
+        }
+
+        $user->setUserDataValue('hard_reset_' . $type, date('Y-m-d H:i:s'));
+
+        return true;
+    }
+
     public static function deleteFutureQueuesForUser(int $userId, string $type): void
     {
         self::deleteAll([

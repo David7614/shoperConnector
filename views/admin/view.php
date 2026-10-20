@@ -162,6 +162,24 @@ th.sorted           { background:#ddeeff; }
                     <span style="color:#bbb;">brak zakończonych</span>
                 <?php endif ?>
             </div>
+            <?php if (array_key_exists($type, $hardResetDates)): ?>
+            <div style="margin-top:8px; padding-top:7px; border-top:1px solid #eee;">
+                <form method="post" action="<?= Url::to(['admin/hard-reset-type']) ?>"
+                      onsubmit="return confirm('TWARDY RESET: <?= Html::encode(strtoupper($type)) ?>\n\nUsunie daty i flagi integracji i doda nową kolejkę.\nSystem pobierze ponownie WSZYSTKIE dane z API.\n\nCzy na pewno chcesz wykonać reset?')">
+                    <?= Html::hiddenInput(Yii::$app->request->csrfParam, Yii::$app->request->csrfToken) ?>
+                    <input type="hidden" name="userId" value="<?= $user->id ?>">
+                    <input type="hidden" name="type"   value="<?= Html::encode($type) ?>">
+                    <button type="submit" class="btn btn-xs btn-danger" title="Wymuś ponowne pobranie wszystkich danych z API">
+                        &#9888; Twardy reset
+                    </button>
+                </form>
+                <?php if (!empty($hardResetDates[$type])): ?>
+                    <div style="font-size:10px; color:#a00; margin-top:3px;" title="<?= Html::encode($hardResetDates[$type]) ?>">
+                        ostatni reset: <?= Html::encode(date('d.m.Y H:i', strtotime($hardResetDates[$type]))) ?>
+                    </div>
+                <?php endif ?>
+            </div>
+            <?php endif ?>
         </div>
         <?php endforeach ?>
     </div>
