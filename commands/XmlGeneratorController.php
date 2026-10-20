@@ -19,6 +19,7 @@ use yii\db\Query;
 use app\models\User;
 use SoapClient;
 use app\models\Customers;
+use app\models\IntegrationData;
 use app\models\Product;
 use app\modules\shoper\models\ShoperCategories;
 use app\modules\shoper\models\ShoperCategoriesLanguage;
@@ -476,6 +477,15 @@ class XmlGeneratorController extends Controller
         // Queue::resetAllException();
     }
     
+    /**
+     * Wymusza pelne pobranie klientow, adresow i subskrybentow w nastepnym cyklu.
+     */
+    public function actionResetCustomers(int $userId)
+    {
+        IntegrationData::setData('INITIAL_CUSTOMERS_DONE', '0', $userId);
+        echo "user {$userId}: next customer queue will fetch all customers" . PHP_EOL;
+    }
+
     public function actionResetExceptions()
     {
         die ("DISABLED");

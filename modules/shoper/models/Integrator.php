@@ -324,6 +324,7 @@ class Integrator extends ShoperShops{
         }
         $app=$this->prepareConnection();
         $resource = new Subscriber($app->getClient());
+        $resource->limit(50);
         // if (isset($parameters['subscriber_prev']['page']) && $parameters['subscriber']['page']<$parameters['subscriber_prev']['page']){
         //     $parameters['subscriber']['page']=$parameters['subscriber_prev']['page']-1;
         // }
@@ -435,6 +436,7 @@ class Integrator extends ShoperShops{
 
         $app=$this->prepareConnection();
         $resource = new UserAddress($app->getClient());
+        $resource->limit(50);
 
         
 
@@ -532,21 +534,21 @@ class Integrator extends ShoperShops{
 
         $client = $app->getClient();
         $resource = new ShoperUser($client);
+        $resource->limit(50);
         if ($queue->page){
             $resource->page($queue->page+1);
         }
 
         echo "[customer] get from api" . PHP_EOL;
 
+        // tabela customers trzyma pelna baze klientow - filtr subskrybentow w feedzie musi widziec wszystkich
         if ($queue->getCurrentUser()->getIncrementalFeedFlag()) {
-            if ($queue->page == 0) {
-                Customers::deleteAll(['user_id' => $queue->getCurrentUser()->id]); // delete all obsolete entries
-            }
             $date2weeksago = date('Y-m-d', strtotime('-2 weeks'));
             IntegrationData::setLastCustomerIntegrationDate($date2weeksago, $queue->getCurrentUser()->id);
         }
 
-        if (IntegrationData::getLastCustomerIntegrationDate($queue->getCurrentUser()->id)){
+        // bez INITIAL_CUSTOMERS_DONE pobieramy wszystkich (pierwszy import albo reset-customers)
+        if (IntegrationData::getDataValue('INITIAL_CUSTOMERS_DONE', $queue->getCurrentUser()->id)){
             $resource->filters([
                 // 'origin' => [0,1,2],
                 'updated_at'=>[
@@ -596,7 +598,7 @@ class Integrator extends ShoperShops{
             $Customer->data_permission='full'; // pewnie z adresów trzeba;
             $Customer->tags=serialize($res->tags);
 
-            if (!$Customer->save()) {
+            if (!$this->saveCustomerSafely($Customer)) {
                 print_r($Customer->getErrors());
                 die("!!");
             }
@@ -608,6 +610,44 @@ class Integrator extends ShoperShops{
         }
 
         return true;
+    }
+
+    private function saveCustomerSafely(Customers $customer): bool
+    {
+        try {
+            return $customer->save();
+        } catch (IntegrityException $e) {
+            if (!$customer->isNewRecord) {
+                throw $e;
+            }
+
+            $existing = Customers::findOne([
+                'user_id'     => $customer->user_id,
+                'customer_id' => $customer->customer_id,
+            ]);
+
+            if (!$existing) {
+                throw $e;
+            }
+
+            echo "[customer] duplicate key for {$customer->customer_id} - updating existing row" . PHP_EOL;
+            $existing->setAttributes($customer->getAttributes(null, ['id', 'updated']), false);
+
+            return $existing->save();
+        }
+    }
+
+    /**
+     * Klienci do feedu. Przy trybie inkrementalnym tylko ruszeni w ostatnich 2 tygodniach,
+     * mimo ze tabela trzyma pelna baze.
+     */
+    private function customersFeedQuery($user)
+    {
+        $query = Customers::find()->where(['user_id' => $user->id]);
+        if ($user->getIncrementalFeedFlag()) {
+            $query->andWhere(['>=', 'updated', date('Y-m-d', strtotime('-2 weeks'))]);
+        }
+        return $query;
     }
 
     public function generateProducers($queue){
@@ -1228,7 +1268,7 @@ class Integrator extends ShoperShops{
 
     public function prepareCustomersFile($queue): bool
     {
-        $query   = Customers::find()->where(['user_id' => $queue->getCurrentUser()->id]);
+        $query   = $this->customersFeedQuery($queue->getCurrentUser());
         $storage = $this->getStorage();
         if ($storage) {
             return $this->prepareCustomersFileChunked($query, $storage);
@@ -1392,7 +1432,7 @@ class Integrator extends ShoperShops{
 
         $user = $queue->getCurrentUser();
 
-        $customers_query = Customers::find()->where(['user_id' => $user->id])->orderBy('id');
+        $customers_query = $this->customersFeedQuery($user)->orderBy('id');
 
         $customerEmails = Customers::find()->select('email')
             ->where(['user_id' => $user->id])
