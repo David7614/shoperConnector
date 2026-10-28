@@ -343,6 +343,7 @@ class AdminController extends Controller
                     $admin->client_id     = sha1($username . $email);
                     $admin->client_secret = md5(hash('sha256', $admin->client_id . $username));
                     $admin->active        = 1;
+                    $admin->register_date = date('Y-m-d H:i:s');
                     if ($admin->save(false)) {
                         if (!$auth->getAssignment('admin', $admin->id)) {
                             $auth->assign($adminRole, $admin->id);
